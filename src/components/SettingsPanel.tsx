@@ -3,7 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { reduceDimensionality } from '../lib/dimensionality';
 import { computeKMeans, CLUSTER_COLORS } from '../lib/clustering';
 import { removeOutliers } from '../lib/outliers';
-import { exportInteractiveHTML, exportDataAsCSV } from '../lib/export';
+import { exportInteractiveHTML, exportDataAsCSV, exportSelectedAsCSV } from '../lib/export';
 import type { DimensionalityMethod, ColorMode, PlotTool } from '../types';
 
 // Icons
@@ -112,6 +112,7 @@ export function SettingsPanel() {
     outlierSettings,
     visualization,
     clusterLabels,
+    selectedIndices,
     setDRMethod,
     setTSNEParams,
     setUMAPParams,
@@ -264,6 +265,35 @@ export function SettingsPanel() {
 
     exportDataAsCSV(data, `${dataset.name.replace(/\.[^/.]+$/, '')}-coordinates.csv`);
   }, [dataset, clusterLabels]);
+
+  const handleExportSelected = useCallback(() => {
+    if (!dataset || selectedIndices.length === 0) return;
+
+    // Get valid molecules with coordinates (same filtering as ScatterPlot)
+    const validMolecules = dataset.molecules.filter((m) => m.isValid && m.coordinates);
+    if (validMolecules.length === 0) return;
+
+    // Get the selected molecules based on plot indices
+    const selectedMolecules = selectedIndices
+      .filter(i => i < validMolecules.length)
+      .map(i => validMolecules[i]);
+
+    // Extract original row data
+    const originalRows = selectedMolecules
+      .map(m => m.originalRow)
+      .filter((row): row is Record<string, unknown> => row !== undefined);
+
+    if (originalRows.length === 0) return;
+
+    // Use original CSV headers if available
+    const headers = dataset.csvHeaders || Object.keys(originalRows[0]);
+
+    exportSelectedAsCSV(
+      originalRows,
+      headers,
+      `${dataset.name.replace(/\.[^/.]+$/, '')}-selected.csv`
+    );
+  }, [dataset, selectedIndices]);
 
   return (
     <div className="settings-panel">
@@ -650,6 +680,21 @@ export function SettingsPanel() {
             <p className="param-hint" style={{ marginTop: 12 }}>
               HTML exports an interactive Plotly chart. CSV exports coordinates with SMILES.
             </p>
+
+            {selectedIndices.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <button
+                  onClick={handleExportSelected}
+                  disabled={isLoading}
+                  className="btn btn-primary"
+                >
+                  Export {selectedIndices.length} Selected
+                </button>
+                <p className="param-hint" style={{ marginTop: 8 }}>
+                  Exports selected points with all original CSV columns.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}

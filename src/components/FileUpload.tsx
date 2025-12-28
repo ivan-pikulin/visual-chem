@@ -64,12 +64,17 @@ export function FileUpload() {
 
         setProgress(10, 'Processing molecules...');
 
-        // Extract molecule data
-        const molecules: MoleculeData[] = data
-          .map((row) => ({
+        // Get CSV headers for later export
+        const csvHeaders = result.meta.fields || Object.keys(data[0]);
+
+        // Extract molecule data with original row data
+        const molecules: (MoleculeData & { originalRow: Record<string, unknown>; originalIndex: number })[] = data
+          .map((row, index) => ({
             smiles: row[smilesCol]?.trim() || '',
             value: parseFloat(row[valueCol]) || 0,
             isValid: false,
+            originalRow: row as Record<string, unknown>,
+            originalIndex: index,
           }))
           .filter((m) => m.smiles.length > 0);
 
@@ -113,6 +118,7 @@ export function FileUpload() {
           molecules: finalMolecules,
           valueRange,
           name: file.name,
+          csvHeaders,
         };
 
         setDataset(dataset);

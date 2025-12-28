@@ -1076,6 +1076,53 @@ input[type="range"]:disabled {
   color: var(--color-text-secondary);
 }
 
+/* Selection indicator */
+.selection-indicator {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(59, 130, 246, 0.95);
+  border-radius: 20px;
+  box-shadow: var(--shadow-md);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.selection-count {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.selection-label {
+  opacity: 0.9;
+}
+
+.selection-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 4px;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 50%;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.selection-clear:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 /* ========================================
    PROGRESS BAR
    ======================================== */
@@ -1137,6 +1184,24 @@ input[type="range"]:disabled {
   font-size: 12px;
   color: var(--color-text-tertiary);
   margin-top: 8px;
+}
+
+.progress-time {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.progress-elapsed,
+.progress-remaining {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.progress-remaining {
+  color: var(--color-text-secondary);
 }
 
 /* ========================================

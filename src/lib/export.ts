@@ -148,3 +148,55 @@ function fallbackDownload(content: string, filename: string, mimeType: string): 
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/**
+ * Export selected molecules with their original CSV data
+ * This preserves all original columns from the CSV file
+ */
+export async function exportSelectedAsCSV(
+  originalRows: Record<string, unknown>[],
+  headers: string[],
+  defaultFilename: string = 'selected-molecules.csv'
+): Promise<boolean> {
+  if (originalRows.length === 0) {
+    return false;
+  }
+
+  // Build CSV with original headers
+  const escapeCSV = (value: unknown): string => {
+    const str = String(value ?? '');
+    // Escape quotes and wrap in quotes if contains comma, quote, or newline
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const rows = originalRows.map(row =>
+    headers.map(header => escapeCSV(row[header])).join(',')
+  );
+
+  const csv = [headers.join(','), ...rows].join('\n');
+
+  try {
+    // Open save dialog
+    const filePath = await save({
+      defaultPath: defaultFilename,
+      filters: [{
+        name: 'CSV',
+        extensions: ['csv']
+      }]
+    });
+
+    if (filePath) {
+      await writeTextFile(filePath, csv);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Export error:', error);
+    // Fallback to browser download if Tauri is not available
+    fallbackDownload(csv, defaultFilename, 'text/csv;charset=utf-8;');
+    return true;
+  }
+}

@@ -1,7 +1,7 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import Plotly from 'plotly.js-dist-min';
 import createPlotlyComponent from 'react-plotly.js/factory';
-import type { PlotHoverEvent, PlotRelayoutEvent } from 'plotly.js';
+import type { PlotHoverEvent, PlotRelayoutEvent, PlotSelectionEvent } from 'plotly.js';
 import { useAppStore } from '../store/useAppStore';
 import { CLUSTER_COLORS } from '../lib/clustering';
 
@@ -34,7 +34,9 @@ export function ScatterPlot() {
     clusterLabels,
     outlierSettings,
     toolbar,
+    selectedIndices,
     setHoveredIndex,
+    setSelectedIndices,
   } = useAppStore();
 
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
@@ -166,6 +168,21 @@ export function ScatterPlot() {
     }
   }, []);
 
+  const handleSelected = useCallback(
+    (event: Readonly<PlotSelectionEvent>) => {
+      if (event && event.points && event.points.length > 0) {
+        // Map selected point indices to original molecule indices
+        const indices = event.points.map((p) => p.pointIndex);
+        setSelectedIndices(indices);
+      }
+    },
+    [setSelectedIndices]
+  );
+
+  const handleDeselect = useCallback(() => {
+    setSelectedIndices([]);
+  }, [setSelectedIndices]);
+
   if (!plotData || !markerConfig) {
     return (
       <div className="scatter-plot-empty">
@@ -242,6 +259,8 @@ export function ScatterPlot() {
         onHover={handleHover}
         onUnhover={handleUnhover}
         onRelayout={handleRelayout}
+        onSelected={handleSelected}
+        onDeselect={handleDeselect}
       />
 
       {/* Molecule tooltip */}
@@ -256,6 +275,21 @@ export function ScatterPlot() {
       {/* Cluster legend */}
       {visualization.colorMode === 'cluster' && clustering.enabled && clusterLabels && (
         <ClusterLegend nClusters={clustering.nClusters} clusterLabels={clusterLabels} />
+      )}
+
+      {/* Selection indicator */}
+      {selectedIndices.length > 0 && (
+        <div className="selection-indicator">
+          <span className="selection-count">{selectedIndices.length}</span>
+          <span className="selection-label">selected</span>
+          <button
+            className="selection-clear"
+            onClick={handleDeselect}
+            title="Clear selection"
+          >
+            ×
+          </button>
+        </div>
       )}
     </div>
   );

@@ -15,6 +15,8 @@ export interface ProcessedMolecule extends MoleculeData {
   coordinates?: Point2D;
   cluster?: number;
   isOutlier?: boolean;
+  originalRow?: Record<string, unknown>; // Original CSV row data
+  originalIndex?: number; // Original row index in CSV
 }
 
 export interface Dataset {
@@ -23,6 +25,7 @@ export interface Dataset {
   valueRange: { min: number; max: number };
   name: string;
   color?: string;
+  csvHeaders?: string[]; // Original CSV column headers
 }
 
 export type DimensionalityMethod = 'tsne' | 'umap' | 'pca';

@@ -72,6 +72,7 @@ export interface AppState {
   progress: number;
   progressMessage: string;
   error: string | null;
+  needsAnalysis: boolean; // true when data loaded but DR not yet run
 
   // Settings
   drMethod: DimensionalityMethod;
@@ -104,6 +105,7 @@ export interface AppState {
   setLoading: (loading: boolean) => void;
   setProgress: (progress: number, message?: string) => void;
   setError: (error: string | null) => void;
+  setNeedsAnalysis: (needsAnalysis: boolean) => void;
 
   // Actions - DR Settings
   setDRMethod: (method: DimensionalityMethod) => void;

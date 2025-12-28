@@ -49,6 +49,7 @@ export function SettingsPanel() {
     tsneParams,
     umapParams,
     isLoading,
+    needsAnalysis,
     clustering,
     outlierSettings,
     visualization,
@@ -60,6 +61,7 @@ export function SettingsPanel() {
     setLoading,
     updateCoordinates,
     setError,
+    setNeedsAnalysis,
     setClusteringEnabled,
     setNClusters,
     updateMoleculeClusters,
@@ -121,6 +123,7 @@ export function SettingsPanel() {
       }
 
       setProgress(100, 'Done!');
+      setNeedsAnalysis(false);
     } catch (error) {
       console.error('Error in dimensionality reduction:', error);
       setError(error instanceof Error ? error.message : 'Unknown error');
@@ -130,7 +133,7 @@ export function SettingsPanel() {
   }, [
     dataset, drMethod, tsneParams, umapParams, clustering, outlierSettings,
     setLoading, setProgress, updateCoordinates, updateMoleculeClusters,
-    updateMoleculeOutliers, setError
+    updateMoleculeOutliers, setError, setNeedsAnalysis
   ]);
 
   const handleMethodChange = (method: DimensionalityMethod) => {
@@ -204,6 +207,19 @@ export function SettingsPanel() {
 
   return (
     <div className="settings-panel">
+      {/* Analysis required banner */}
+      {needsAnalysis && dataset && (
+        <div className="analysis-banner">
+          <svg className="analysis-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v4M12 16h.01" />
+          </svg>
+          <div className="analysis-banner-text">
+            <strong>Data loaded!</strong> Configure parameters below and click <strong>Run Analysis</strong> to compute dimensionality reduction.
+          </div>
+        </div>
+      )}
+
       {/* Dimensionality Reduction Method */}
       <div className={`settings-section ${openSections.has('method') ? 'open' : ''}`}>
         <div className="section-header" onClick={() => toggleSection('method')}>
@@ -335,10 +351,10 @@ export function SettingsPanel() {
             <button
               onClick={handleRerun}
               disabled={isLoading}
-              className="btn btn-primary"
+              className={`btn btn-primary ${needsAnalysis ? 'btn-accent' : ''}`}
               style={{ marginTop: 16 }}
             >
-              {isLoading ? 'Processing...' : 'Rerun Analysis'}
+              {isLoading ? 'Processing...' : needsAnalysis ? 'Run Analysis' : 'Rerun Analysis'}
             </button>
           )}
         </div>

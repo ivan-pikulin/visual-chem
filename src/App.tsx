@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAppStore } from './store/useAppStore';
 import {
   ScatterPlot,
@@ -11,9 +11,17 @@ import {
 import './index.css';
 
 function App() {
-  const { dataset } = useAppStore();
+  const { dataset, needsAnalysis } = useAppStore();
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+
+  // Auto-open settings sidebar when file is loaded and needs analysis
+  useEffect(() => {
+    if (needsAnalysis) {
+      setRightSidebarOpen(true);
+      setLeftSidebarOpen(false);
+    }
+  }, [needsAnalysis]);
 
   const toggleLeftSidebar = useCallback(() => {
     setLeftSidebarOpen((prev) => !prev);

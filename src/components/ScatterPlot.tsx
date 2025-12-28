@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState, useRef } from 'react';
+import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import Plotly from 'plotly.js-dist-min';
 import createPlotlyComponent from 'react-plotly.js/factory';
 import type { PlotHoverEvent, PlotRelayoutEvent } from 'plotly.js';
@@ -31,6 +31,22 @@ export function ScatterPlot() {
     isOutlier?: boolean;
   } | null>(null);
   const axisRangeRef = useRef<AxisRange>({});
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Prevent page scroll when scrolling on the plot (for zoom)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
 
   const plotData = useMemo(() => {
     if (!dataset) return null;
@@ -156,7 +172,7 @@ export function ScatterPlot() {
   }
 
   return (
-    <div className="scatter-plot-container">
+    <div className="scatter-plot-container" ref={containerRef}>
       <Plot
         data={[
           {

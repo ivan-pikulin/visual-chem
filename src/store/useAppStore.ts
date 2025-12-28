@@ -63,6 +63,7 @@ export const useAppStore = create<AppState>((set) => ({
   progress: 0,
   progressMessage: '',
   error: null,
+  needsAnalysis: false,
 
   // Settings
   drMethod: 'umap',
@@ -143,6 +144,8 @@ export const useAppStore = create<AppState>((set) => ({
     set({ progress, progressMessage: message ?? '' }),
 
   setError: (error: string | null) => set({ error, isLoading: false }),
+
+  setNeedsAnalysis: (needsAnalysis: boolean) => set({ needsAnalysis }),
 
   // Actions - DR Settings
   setDRMethod: (drMethod: DimensionalityMethod) => set({ drMethod }),
@@ -265,6 +268,7 @@ export const useAppStore = create<AppState>((set) => ({
       progress: 0,
       progressMessage: '',
       error: null,
+      needsAnalysis: false,
       clusterLabels: null,
       hoveredIndex: null,
       selectedIndices: [],

@@ -10,10 +10,13 @@ export function getAdaptiveUMAPParams(nSamples: number): Partial<UMAPParams> {
   // Adaptive n_neighbors based on dataset size (similar to ChemPlot)
   const nNeighbors = Math.max(2, Math.min(100, Math.floor(Math.sqrt(nSamples))));
 
+  // Adaptive epochs based on dataset size
+  const nEpochs = Math.min(500, Math.max(200, nSamples));
+
   return {
     nNeighbors,
     minDist: 0.1,
-    nEpochs: Math.min(500, Math.max(200, nSamples)),
+    nEpochs,
   };
 }
 

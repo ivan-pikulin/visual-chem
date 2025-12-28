@@ -3,7 +3,7 @@ import Papa from 'papaparse';
 import { useAppStore } from '../store/useAppStore';
 import { initRDKit } from '../lib/rdkit';
 import { computeFingerprints, precomputeSVGs } from '../lib/fingerprints';
-import { reduceDimensionality, getAdaptiveParams } from '../lib/dimensionality';
+import { getAdaptiveParams } from '../lib/dimensionality';
 import type { MoleculeData, Dataset } from '../types';
 
 export function FileUpload() {
@@ -12,11 +12,9 @@ export function FileUpload() {
     setLoading,
     setProgress,
     setError,
-    drMethod,
-    tsneParams,
-    umapParams,
     setTSNEParams,
     setUMAPParams,
+    setNeedsAnalysis,
   } = useAppStore();
 
   const [isDragging, setIsDragging] = useState(false);
@@ -94,40 +92,14 @@ export function FileUpload() {
           throw new Error('No valid molecules after fingerprint computation');
         }
 
-        // Get adaptive parameters
+        // Get adaptive parameters based on dataset size
         const adaptiveParams = getAdaptiveParams(validMolecules.length);
         setTSNEParams(adaptiveParams.tsne);
         setUMAPParams(adaptiveParams.umap);
 
-        // Run dimensionality reduction
-        setProgress(50, `Running ${drMethod.toUpperCase()}...`);
-        const fingerprintMatrix = validMolecules.map((m) => m.fingerprint);
-
-        const coordinates = await reduceDimensionality(
-          fingerprintMatrix,
-          drMethod,
-          {
-            tsne: { ...tsneParams, ...adaptiveParams.tsne },
-            umap: { ...umapParams, ...adaptiveParams.umap },
-          },
-          (p) => {
-            const percent = 50 + (p.current / p.total) * 45;
-            setProgress(percent, `${p.stage.toUpperCase()}: ${p.current}/${p.total}`);
-          }
-        );
-
-        // Assign coordinates to valid molecules
-        let coordIdx = 0;
-        const moleculesWithCoords = processed.map((mol) => {
-          if (mol.isValid && coordIdx < coordinates.length) {
-            return { ...mol, coordinates: coordinates[coordIdx++] };
-          }
-          return mol;
-        });
-
-        // Generate SVG images for molecules
-        setProgress(96, 'Generating molecule images...');
-        const finalMolecules = precomputeSVGs(moleculesWithCoords);
+        // Generate SVG images for molecules (no coordinates yet)
+        setProgress(80, 'Generating molecule images...');
+        const finalMolecules = precomputeSVGs(processed);
 
         // Calculate value range
         const values = finalMolecules.filter((m) => m.isValid).map((m) => m.value);
@@ -144,7 +116,8 @@ export function FileUpload() {
         };
 
         setDataset(dataset);
-        setProgress(100, 'Done!');
+        setProgress(100, 'File loaded! Configure parameters and run analysis.');
+        setNeedsAnalysis(true);
         setLoading(false);
       } catch (error) {
         console.error('Error processing file:', error);
@@ -152,7 +125,7 @@ export function FileUpload() {
         setLoading(false);
       }
     },
-    [drMethod, tsneParams, umapParams, setDataset, setLoading, setProgress, setError, setTSNEParams, setUMAPParams]
+    [setDataset, setLoading, setProgress, setError, setTSNEParams, setUMAPParams, setNeedsAnalysis]
   );
 
   const handleDrop = useCallback(

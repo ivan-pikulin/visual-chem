@@ -124,8 +124,9 @@ export function ScatterPlot() {
   }, [plotData, visualization, clustering.enabled, clusterLabels]);
 
   // Compute which tools to remove (inverse of enabled tools)
+  // Cast to any[] because Plotly's types don't include all valid modebar buttons (e.g., drawing tools)
   const modeBarButtonsToRemove = useMemo(() => {
-    return ALL_TOOLS.filter((tool) => !toolbar.enabledTools.includes(tool as typeof toolbar.enabledTools[number]));
+    return ALL_TOOLS.filter((tool) => !toolbar.enabledTools.includes(tool as typeof toolbar.enabledTools[number])) as unknown as Plotly.ModeBarDefaultButtons[];
   }, [toolbar.enabledTools]);
 
   const handleHover = useCallback(

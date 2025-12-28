@@ -9,6 +9,8 @@ import type {
   VisualizationSettings,
   ClusteringSettings,
   OutlierSettings,
+  ToolbarSettings,
+  PlotTool,
 } from '../types';
 
 const defaultTSNEParams: TSNEParams = {
@@ -38,6 +40,10 @@ const defaultClustering: ClusteringSettings = {
 const defaultOutlierSettings: OutlierSettings = {
   enabled: false,
   threshold: 3.0,
+};
+
+const defaultToolbar: ToolbarSettings = {
+  enabledTools: ['pan2d', 'select2d', 'lasso2d', 'toImage'],
 };
 
 // Color palette for multiple datasets
@@ -79,6 +85,7 @@ export const useAppStore = create<AppState>((set) => ({
 
   // Visualization
   visualization: defaultVisualization,
+  toolbar: defaultToolbar,
   hoveredIndex: null,
   selectedIndices: [],
 
@@ -175,6 +182,18 @@ export const useAppStore = create<AppState>((set) => ({
   // Actions - Visualization
   setVisualization: (settings: Partial<VisualizationSettings>) =>
     set((state) => ({ visualization: { ...state.visualization, ...settings } })),
+
+  setToolbar: (settings: Partial<ToolbarSettings>) =>
+    set((state) => ({ toolbar: { ...state.toolbar, ...settings } })),
+
+  toggleTool: (tool: PlotTool) =>
+    set((state) => {
+      const current = state.toolbar.enabledTools;
+      const newTools = current.includes(tool)
+        ? current.filter((t) => t !== tool)
+        : [...current, tool];
+      return { toolbar: { ...state.toolbar, enabledTools: newTools } };
+    }),
 
   setHoveredIndex: (hoveredIndex: number | null) => set({ hoveredIndex }),
 
@@ -273,6 +292,7 @@ export const useAppStore = create<AppState>((set) => ({
       hoveredIndex: null,
       selectedIndices: [],
       visualization: defaultVisualization,
+      toolbar: defaultToolbar,
       clustering: defaultClustering,
       outlierSettings: defaultOutlierSettings,
     }),

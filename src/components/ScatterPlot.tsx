@@ -12,6 +12,20 @@ interface AxisRange {
   yaxis?: [number, number];
 }
 
+// All available tools (must match PlotTool type)
+const ALL_TOOLS = [
+  // Navigation
+  'zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d',
+  // Selection
+  'select2d', 'lasso2d',
+  // Drawing
+  'drawline', 'drawopenpath', 'drawclosedpath', 'drawcircle', 'drawrect', 'eraseshape',
+  // Hover & Spikes
+  'hoverClosestCartesian', 'hoverCompareCartesian', 'toggleSpikelines', 'toggleHover',
+  // Export
+  'toImage', 'sendDataToCloud',
+] as const;
+
 export function ScatterPlot() {
   const {
     dataset,
@@ -19,6 +33,7 @@ export function ScatterPlot() {
     clustering,
     clusterLabels,
     outlierSettings,
+    toolbar,
     setHoveredIndex,
   } = useAppStore();
 
@@ -105,6 +120,11 @@ export function ScatterPlot() {
       };
     }
   }, [plotData, visualization, clustering.enabled, clusterLabels]);
+
+  // Compute which tools to remove (inverse of enabled tools)
+  const modeBarButtonsToRemove = useMemo(() => {
+    return ALL_TOOLS.filter((tool) => !toolbar.enabledTools.includes(tool as typeof toolbar.enabledTools[number]));
+  }, [toolbar.enabledTools]);
 
   const handleHover = useCallback(
     (event: Readonly<PlotHoverEvent>) => {
@@ -213,7 +233,7 @@ export function ScatterPlot() {
         config={{
           displayModeBar: true,
           displaylogo: false,
-          modeBarButtonsToRemove: ['autoScale2d', 'lasso2d', 'select2d'],
+          modeBarButtonsToRemove: modeBarButtonsToRemove,
           scrollZoom: true,
           responsive: true,
         }}

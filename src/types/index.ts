@@ -64,6 +64,37 @@ export interface OutlierSettings {
   threshold: number;
 }
 
+export type PlotTool =
+  // 2D Cartesian
+  | 'zoom2d'
+  | 'pan2d'
+  | 'select2d'
+  | 'lasso2d'
+  | 'zoomIn2d'
+  | 'zoomOut2d'
+  | 'autoScale2d'
+  | 'resetScale2d'
+  // Hover modes
+  | 'hoverClosestCartesian'
+  | 'hoverCompareCartesian'
+  // Drawing tools
+  | 'drawline'
+  | 'drawopenpath'
+  | 'drawclosedpath'
+  | 'drawcircle'
+  | 'drawrect'
+  | 'eraseshape'
+  // Spikes & toggle
+  | 'toggleSpikelines'
+  | 'toggleHover'
+  // Export
+  | 'toImage'
+  | 'sendDataToCloud';
+
+export interface ToolbarSettings {
+  enabledTools: PlotTool[];
+}
+
 export interface AppState {
   // Data
   datasets: Dataset[];
@@ -88,6 +119,7 @@ export interface AppState {
 
   // Visualization
   visualization: VisualizationSettings;
+  toolbar: ToolbarSettings;
   hoveredIndex: number | null;
   selectedIndices: number[];
 
@@ -122,6 +154,8 @@ export interface AppState {
 
   // Actions - Visualization
   setVisualization: (settings: Partial<VisualizationSettings>) => void;
+  setToolbar: (settings: Partial<ToolbarSettings>) => void;
+  toggleTool: (tool: PlotTool) => void;
   setHoveredIndex: (index: number | null) => void;
   setSelectedIndices: (indices: number[]) => void;
 

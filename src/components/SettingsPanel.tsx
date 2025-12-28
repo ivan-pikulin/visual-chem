@@ -4,7 +4,7 @@ import { reduceDimensionality } from '../lib/dimensionality';
 import { computeKMeans, CLUSTER_COLORS } from '../lib/clustering';
 import { removeOutliers } from '../lib/outliers';
 import { exportInteractiveHTML, exportDataAsCSV } from '../lib/export';
-import type { DimensionalityMethod, ColorMode } from '../types';
+import type { DimensionalityMethod, ColorMode, PlotTool } from '../types';
 
 // Icons
 const ChevronDownIcon = () => (
@@ -40,7 +40,65 @@ const ExportIcon = () => (
   </svg>
 );
 
-type SectionId = 'method' | 'analysis' | 'visualization' | 'export';
+const ToolbarIcon = () => (
+  <svg className="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+  </svg>
+);
+
+// Tool definitions with labels - organized by category
+const TOOL_CATEGORIES: { category: string; tools: { id: PlotTool; label: string; description: string }[] }[] = [
+  {
+    category: 'Navigation',
+    tools: [
+      { id: 'pan2d', label: 'Pan', description: 'Drag to pan the view' },
+      { id: 'zoom2d', label: 'Zoom Box', description: 'Draw rectangle to zoom' },
+      { id: 'zoomIn2d', label: 'Zoom In', description: 'Zoom in incrementally' },
+      { id: 'zoomOut2d', label: 'Zoom Out', description: 'Zoom out incrementally' },
+      { id: 'autoScale2d', label: 'Auto Scale', description: 'Auto-scale axes' },
+      { id: 'resetScale2d', label: 'Reset View', description: 'Reset to original view' },
+    ],
+  },
+  {
+    category: 'Selection',
+    tools: [
+      { id: 'select2d', label: 'Box Select', description: 'Select points with rectangle' },
+      { id: 'lasso2d', label: 'Lasso Select', description: 'Select points with freeform lasso' },
+    ],
+  },
+  {
+    category: 'Drawing',
+    tools: [
+      { id: 'drawline', label: 'Draw Line', description: 'Draw a line annotation' },
+      { id: 'drawrect', label: 'Draw Rectangle', description: 'Draw a rectangle shape' },
+      { id: 'drawcircle', label: 'Draw Circle', description: 'Draw a circle/ellipse shape' },
+      { id: 'drawopenpath', label: 'Draw Path', description: 'Draw an open path' },
+      { id: 'drawclosedpath', label: 'Draw Polygon', description: 'Draw a closed polygon' },
+      { id: 'eraseshape', label: 'Erase Shape', description: 'Erase drawn shapes' },
+    ],
+  },
+  {
+    category: 'Hover & Spikes',
+    tools: [
+      { id: 'hoverClosestCartesian', label: 'Hover Closest', description: 'Show data for closest point' },
+      { id: 'hoverCompareCartesian', label: 'Hover Compare', description: 'Compare data on hover' },
+      { id: 'toggleSpikelines', label: 'Spike Lines', description: 'Toggle spike lines on hover' },
+      { id: 'toggleHover', label: 'Toggle Hover', description: 'Toggle hover mode' },
+    ],
+  },
+  {
+    category: 'Export',
+    tools: [
+      { id: 'toImage', label: 'Save Image', description: 'Download plot as PNG' },
+      { id: 'sendDataToCloud', label: 'Edit in Studio', description: 'Edit in Plotly Chart Studio' },
+    ],
+  },
+];
+
+type SectionId = 'method' | 'analysis' | 'visualization' | 'toolbar' | 'export';
 
 export function SettingsPanel() {
   const {
@@ -68,6 +126,8 @@ export function SettingsPanel() {
     setOutlierSettings,
     updateMoleculeOutliers,
     setVisualization,
+    toolbar,
+    toggleTool,
   } = useAppStore();
 
   const [openSections, setOpenSections] = useState<Set<SectionId>>(
@@ -523,6 +583,40 @@ export function SettingsPanel() {
               </label>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Toolbar Section */}
+      <div className={`settings-section ${openSections.has('toolbar') ? 'open' : ''}`}>
+        <div className="section-header" onClick={() => toggleSection('toolbar')}>
+          <div className="section-header-left">
+            <ToolbarIcon />
+            <span className="section-title">Plot Toolbar</span>
+          </div>
+          <ChevronDownIcon />
+        </div>
+        <div className="section-content">
+          <p className="param-hint" style={{ marginBottom: 12 }}>
+            Select which tools to show in the plot toolbar
+          </p>
+          {TOOL_CATEGORIES.map((category) => (
+            <div key={category.category} className="toolbar-category">
+              <p className="toolbar-category-title">{category.category}</p>
+              <div className="toolbar-tools-grid">
+                {category.tools.map((tool) => (
+                  <label key={tool.id} className="toolbar-tool-item" title={tool.description}>
+                    <input
+                      type="checkbox"
+                      checked={toolbar.enabledTools.includes(tool.id)}
+                      onChange={() => toggleTool(tool.id)}
+                    />
+                    <span className="toolbar-tool-checkbox" />
+                    <span className="toolbar-tool-label">{tool.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

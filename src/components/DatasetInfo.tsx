@@ -1,4 +1,5 @@
 import { useAppStore } from '../store/useAppStore';
+import { CLUSTER_COLORS } from '../lib/clustering';
 
 export function DatasetInfo() {
   const {
@@ -25,83 +26,85 @@ export function DatasetInfo() {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <div className="flex justify-between items-start mb-3">
-        <h2 className="text-lg font-semibold text-gray-800">Dataset Info</h2>
-        <button
-          onClick={reset}
-          className="text-sm text-red-600 hover:text-red-800 transition-colors"
-        >
+    <div className="dataset-info">
+      <div className="dataset-info-header">
+        <span className="dataset-info-title" title={dataset.name}>
+          {dataset.name}
+        </span>
+        <button onClick={reset} className="clear-button">
           Clear
         </button>
       </div>
 
-      <div className="space-y-2 text-sm">
-        <div className="flex justify-between">
-          <span className="text-gray-600">File:</span>
-          <span className="font-medium text-gray-800 truncate ml-2" title={dataset.name}>
-            {dataset.name}
-          </span>
+      <div className="dataset-stats">
+        <div className="stat-row">
+          <span className="stat-label">Total molecules</span>
+          <span className="stat-value">{dataset.molecules.length}</span>
         </div>
 
-        <div className="flex justify-between">
-          <span className="text-gray-600">Total molecules:</span>
-          <span className="font-medium text-gray-800">{dataset.molecules.length}</span>
-        </div>
-
-        <div className="flex justify-between">
-          <span className="text-gray-600">Valid molecules:</span>
-          <span className="font-medium text-green-600">{validCount}</span>
+        <div className="stat-row">
+          <span className="stat-label">Valid molecules</span>
+          <span className="stat-value success">{validCount}</span>
         </div>
 
         {invalidCount > 0 && (
-          <div className="flex justify-between">
-            <span className="text-gray-600">Invalid SMILES:</span>
-            <span className="font-medium text-red-600">{invalidCount}</span>
+          <div className="stat-row">
+            <span className="stat-label">Invalid SMILES</span>
+            <span className="stat-value error">{invalidCount}</span>
           </div>
         )}
 
         {outlierSettings.enabled && outlierCount > 0 && (
-          <div className="flex justify-between">
-            <span className="text-gray-600">Outliers:</span>
-            <span className="font-medium text-orange-600">{outlierCount}</span>
+          <div className="stat-row">
+            <span className="stat-label">Outliers</span>
+            <span className="stat-value warning">{outlierCount}</span>
           </div>
         )}
 
-        <div className="border-t pt-2 mt-2">
-          <div className="flex justify-between">
-            <span className="text-gray-600">Value range:</span>
-            <span className="font-medium text-gray-800">
-              {dataset.valueRange.min.toFixed(3)} - {dataset.valueRange.max.toFixed(3)}
-            </span>
-          </div>
+        <div className="stat-divider" />
+
+        <div className="stat-row">
+          <span className="stat-label">Value range</span>
+          <span className="stat-value">
+            {dataset.valueRange.min.toFixed(3)} — {dataset.valueRange.max.toFixed(3)}
+          </span>
         </div>
 
         {clustering.enabled && clusterLabels && (
-          <div className="border-t pt-2 mt-2">
-            <p className="text-gray-600 mb-1">Cluster distribution:</p>
-            <div className="grid grid-cols-2 gap-1">
+          <>
+            <div className="stat-divider" />
+            <div className="stat-row">
+              <span className="stat-label">Clusters</span>
+              <span className="stat-value">{clustering.nClusters}</span>
+            </div>
+            <div className="cluster-grid">
               {Array.from({ length: clustering.nClusters }, (_, i) => {
                 const count = clusterCounts.get(i) || 0;
-                const percent = ((count / clusterLabels.length) * 100).toFixed(1);
+                const percent = ((count / clusterLabels.length) * 100).toFixed(0);
                 return (
-                  <div key={i} className="text-xs">
-                    <span className="text-gray-500">C{i + 1}:</span>{' '}
-                    <span className="font-medium">{count}</span>{' '}
-                    <span className="text-gray-400">({percent}%)</span>
+                  <div key={i} className="cluster-item">
+                    <span
+                      className="cluster-dot"
+                      style={{ backgroundColor: CLUSTER_COLORS[i % CLUSTER_COLORS.length] }}
+                    />
+                    <span className="cluster-item-label">C{i + 1}</span>
+                    <span className="cluster-item-value">{count}</span>
+                    <span className="cluster-item-label">({percent}%)</span>
                   </div>
                 );
               })}
             </div>
-          </div>
+          </>
         )}
 
         {datasets.length > 1 && (
-          <div className="border-t pt-2 mt-2">
-            <p className="text-gray-600 text-xs">
-              {datasets.length} datasets loaded
-            </p>
-          </div>
+          <>
+            <div className="stat-divider" />
+            <div className="stat-row">
+              <span className="stat-label">Datasets loaded</span>
+              <span className="stat-value">{datasets.length}</span>
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -81,9 +81,10 @@ export function ScatterPlot() {
         color: plotData.values,
         colorscale: 'Inferno',
         colorbar: {
-          title: { text: 'Value' },
-          thickness: 15,
-          len: 0.9,
+          title: { text: 'Value', font: { size: 12 } },
+          thickness: 12,
+          len: 0.8,
+          tickfont: { size: 10 },
         },
       };
     }
@@ -131,14 +132,31 @@ export function ScatterPlot() {
 
   if (!plotData || !markerConfig) {
     return (
-      <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-        <p className="text-gray-500">No data to display. Upload a CSV file to get started.</p>
+      <div className="scatter-plot-empty">
+        <svg
+          className="scatter-plot-empty-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+        >
+          <circle cx="6" cy="6" r="2" />
+          <circle cx="18" cy="8" r="2" />
+          <circle cx="10" cy="14" r="2" />
+          <circle cx="16" cy="18" r="2" />
+          <circle cx="4" cy="18" r="2" />
+          <path d="M3 3v18h18" strokeWidth="1.5" />
+        </svg>
+        <p className="scatter-plot-empty-text">
+          No data to display.<br />
+          Upload a CSV file to get started.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="w-full h-full relative">
+    <div className="scatter-plot-container">
       <Plot
         data={[
           {
@@ -153,19 +171,23 @@ export function ScatterPlot() {
         ]}
         layout={{
           autosize: true,
-          margin: { t: 40, r: 80, b: 60, l: 60 },
+          margin: { t: 20, r: 60, b: 50, l: 50 },
           paper_bgcolor: 'transparent',
-          plot_bgcolor: 'white',
+          plot_bgcolor: '#fafafa',
           xaxis: {
-            title: { text: 'Dimension 1' },
+            title: { text: 'Dimension 1', font: { size: 12 } },
             zeroline: false,
-            gridcolor: '#eee',
+            gridcolor: '#eaeaea',
+            linecolor: '#e2e8f0',
+            tickfont: { size: 10 },
             range: axisRangeRef.current.xaxis,
           },
           yaxis: {
-            title: { text: 'Dimension 2' },
+            title: { text: 'Dimension 2', font: { size: 12 } },
             zeroline: false,
-            gridcolor: '#eee',
+            gridcolor: '#eaeaea',
+            linecolor: '#e2e8f0',
+            tickfont: { size: 10 },
             range: axisRangeRef.current.yaxis,
           },
           hovermode: 'closest',
@@ -220,46 +242,40 @@ function MoleculeTooltip({ molecule, position, showCluster }: MoleculeTooltipPro
     position: 'fixed',
     left: position.x + 15,
     top: position.y - 75,
-    maxWidth: '250px',
     pointerEvents: 'none',
     zIndex: 9999,
   };
 
   return (
-    <div
-      className="bg-white rounded-lg shadow-lg border p-3"
-      style={tooltipStyle}
-    >
+    <div className="molecule-tooltip" style={tooltipStyle}>
       {molecule.svg ? (
         <div
-          className="mb-2"
+          className="molecule-tooltip-image"
           dangerouslySetInnerHTML={{ __html: molecule.svg }}
         />
       ) : (
-        <div className="w-[200px] h-[150px] bg-gray-100 flex items-center justify-center mb-2 rounded">
-          <span className="text-gray-400 text-sm">No image</span>
+        <div className="molecule-tooltip-placeholder">
+          No structure
         </div>
       )}
-      <div className="text-xs space-y-1">
-        <p className="font-mono text-gray-600 truncate" title={molecule.smiles}>
-          {molecule.smiles}
-        </p>
-        <p className="font-semibold">
-          Value: <span className="text-primary-600">{molecule.value.toFixed(4)}</span>
-        </p>
-        {showCluster && molecule.cluster !== undefined && (
-          <p className="flex items-center gap-1">
-            <span
-              className="w-3 h-3 rounded-full inline-block"
-              style={{ backgroundColor: CLUSTER_COLORS[molecule.cluster % CLUSTER_COLORS.length] }}
-            />
-            <span>Cluster {molecule.cluster + 1}</span>
-          </p>
-        )}
-        {molecule.isOutlier && (
-          <p className="text-red-500 font-medium">Outlier</p>
-        )}
-      </div>
+      <p className="molecule-tooltip-smiles" title={molecule.smiles}>
+        {molecule.smiles}
+      </p>
+      <p className="molecule-tooltip-value">
+        Value: <span>{molecule.value.toFixed(4)}</span>
+      </p>
+      {showCluster && molecule.cluster !== undefined && (
+        <div className="molecule-tooltip-cluster">
+          <span
+            className="cluster-legend-dot"
+            style={{ backgroundColor: CLUSTER_COLORS[molecule.cluster % CLUSTER_COLORS.length] }}
+          />
+          <span>Cluster {molecule.cluster + 1}</span>
+        </div>
+      )}
+      {molecule.isOutlier && (
+        <p className="molecule-tooltip-outlier">Outlier</p>
+      )}
     </div>
   );
 }
@@ -278,18 +294,20 @@ function ClusterLegend({ nClusters, clusterLabels }: ClusterLegendProps) {
   const total = clusterLabels.length;
 
   return (
-    <div className="absolute top-2 right-2 bg-white/90 rounded-lg shadow p-2 text-xs">
-      <p className="font-medium mb-1">Clusters</p>
+    <div className="cluster-legend">
+      <p className="cluster-legend-title">Clusters</p>
       {Array.from({ length: nClusters }, (_, i) => {
         const count = counts.get(i) || 0;
-        const percent = ((count / total) * 100).toFixed(1);
+        const percent = ((count / total) * 100).toFixed(0);
         return (
-          <div key={i} className="flex items-center gap-2">
+          <div key={i} className="cluster-legend-item">
             <span
-              className="w-3 h-3 rounded-full"
+              className="cluster-legend-dot"
               style={{ backgroundColor: CLUSTER_COLORS[i % CLUSTER_COLORS.length] }}
             />
-            <span>Cluster {i + 1}: {percent}%</span>
+            <span className="cluster-legend-label">
+              C{i + 1}: {percent}%
+            </span>
           </div>
         );
       })}

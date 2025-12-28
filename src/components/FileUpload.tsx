@@ -197,12 +197,7 @@ export function FileUpload() {
 
   return (
     <div
-      className={`
-        flex flex-col items-center justify-center p-8
-        border-2 border-dashed rounded-lg cursor-pointer
-        transition-colors duration-200
-        ${isDragging ? 'border-primary-500 bg-primary-50' : 'border-gray-300 hover:border-primary-400 hover:bg-gray-50'}
-      `}
+      className={`file-upload ${isDragging ? 'dragging' : ''}`}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -213,11 +208,11 @@ export function FileUpload() {
         type="file"
         accept=".csv"
         onChange={handleFileSelect}
-        className="hidden"
+        className="sr-only"
       />
 
       <svg
-        className={`w-12 h-12 mb-4 ${isDragging ? 'text-primary-500' : 'text-gray-400'}`}
+        className="file-upload-icon"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -225,20 +220,20 @@ export function FileUpload() {
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeWidth={2}
+          strokeWidth={1.5}
           d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
         />
       </svg>
 
-      <p className="text-lg font-medium text-gray-700 mb-1">
-        {isDragging ? 'Drop your CSV file here' : 'Upload CSV File'}
+      <p className="file-upload-title">
+        {isDragging ? 'Drop your file here' : 'Upload CSV File'}
       </p>
-      <p className="text-sm text-gray-500">
+      <p className="file-upload-subtitle">
         Drag and drop or click to select
       </p>
-      <p className="text-xs text-gray-400 mt-2">
-        Required columns: smiles, value
-      </p>
+      <span className="file-upload-hint">
+        smiles, value
+      </span>
     </div>
   );
 }

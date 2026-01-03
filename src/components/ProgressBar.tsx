@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 
 function formatTime(seconds: number): string {
@@ -11,7 +11,7 @@ function formatTime(seconds: number): string {
 }
 
 export function ProgressBar() {
-  const { isLoading, progress, progressMessage } = useAppStore();
+  const { isLoading, progress, progressMessage, cancelOperation } = useAppStore();
   const startTimeRef = useRef<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [estimated, setEstimated] = useState<number | null>(null);
@@ -47,6 +47,10 @@ export function ProgressBar() {
     }
   }, [isLoading, progress]);
 
+  const handleCancel = useCallback(() => {
+    cancelOperation();
+  }, [cancelOperation]);
+
   if (!isLoading) return null;
 
   return (
@@ -73,6 +77,13 @@ export function ProgressBar() {
             )}
           </div>
         )}
+        <button
+          className="progress-cancel-btn"
+          onClick={handleCancel}
+          type="button"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   );

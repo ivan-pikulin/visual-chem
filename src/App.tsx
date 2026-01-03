@@ -7,13 +7,17 @@ import {
   ProgressBar,
   DatasetInfo,
   ErrorMessage,
+  ColumnManager,
 } from './components';
 import './index.css';
+
+type LeftSidebarTab = 'info' | 'columns';
 
 function App() {
   const { dataset, needsAnalysis } = useAppStore();
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+  const [leftTab, setLeftTab] = useState<LeftSidebarTab>('info');
 
   // Auto-open settings sidebar when file is loaded and needs analysis
   useEffect(() => {
@@ -91,9 +95,29 @@ function App() {
                 </svg>
               </button>
             </div>
+
+            {/* Tab switcher - only show when dataset is loaded */}
+            {dataset && (
+              <div className="sidebar-tabs">
+                <button
+                  className={`sidebar-tab ${leftTab === 'info' ? 'active' : ''}`}
+                  onClick={() => setLeftTab('info')}
+                >
+                  Info
+                </button>
+                <button
+                  className={`sidebar-tab ${leftTab === 'columns' ? 'active' : ''}`}
+                  onClick={() => setLeftTab('columns')}
+                >
+                  Columns
+                </button>
+              </div>
+            )}
+
             <div className="sidebar-body">
               {!dataset && <FileUpload />}
-              {dataset && <DatasetInfo />}
+              {dataset && leftTab === 'info' && <DatasetInfo />}
+              {dataset && leftTab === 'columns' && <ColumnManager />}
             </div>
           </div>
         </aside>

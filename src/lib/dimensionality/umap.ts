@@ -1,5 +1,6 @@
 import type { Point2D, UMAPParams } from '../../types';
 import type { WorkerMessage, WorkerResponse } from './dr.worker';
+import { OperationCancelledError } from '../fingerprints';
 
 export interface UMAPProgress {
   epoch: number;
@@ -23,7 +24,8 @@ export function getAdaptiveUMAPParams(nSamples: number): Partial<UMAPParams> {
 export async function computeUMAP(
   data: number[][],
   params: UMAPParams,
-  onProgress?: (progress: UMAPProgress) => void
+  onProgress?: (progress: UMAPProgress) => void,
+  signal?: AbortSignal
 ): Promise<Point2D[]> {
   if (data.length === 0) return [];
 
@@ -34,6 +36,19 @@ export async function computeUMAP(
       { type: 'module' }
     );
 
+    // Handle abort signal
+    const abortHandler = () => {
+      worker.terminate();
+      reject(new OperationCancelledError());
+    };
+
+    if (signal?.aborted) {
+      reject(new OperationCancelledError());
+      return;
+    }
+
+    signal?.addEventListener('abort', abortHandler);
+
     worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       const { type, progress, result, error } = event.data;
 
@@ -43,15 +58,18 @@ export async function computeUMAP(
           totalEpochs: progress.total,
         });
       } else if (type === 'result' && result) {
+        signal?.removeEventListener('abort', abortHandler);
         worker.terminate();
         resolve(result);
       } else if (type === 'error') {
+        signal?.removeEventListener('abort', abortHandler);
         worker.terminate();
         reject(new Error(error || 'Worker error'));
       }
     };
 
     worker.onerror = (error) => {
+      signal?.removeEventListener('abort', abortHandler);
       worker.terminate();
       reject(new Error(`Worker error: ${error.message}`));
     };

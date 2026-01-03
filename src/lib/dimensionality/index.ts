@@ -1,6 +1,7 @@
 import { computePCA } from './pca';
 import { computeUMAP, getAdaptiveUMAPParams } from './umap';
 import { computeTSNE, getAdaptiveTSNEParams } from './tsne';
+import { OperationCancelledError } from '../fingerprints';
 import type { Point2D, DimensionalityMethod, TSNEParams, UMAPParams } from '../../types';
 
 export interface DRProgress {
@@ -13,9 +14,15 @@ export async function reduceDimensionality(
   data: number[][],
   method: DimensionalityMethod,
   params: { tsne: TSNEParams; umap: UMAPParams },
-  onProgress?: (progress: DRProgress) => void
+  onProgress?: (progress: DRProgress) => void,
+  signal?: AbortSignal
 ): Promise<Point2D[]> {
   if (data.length === 0) return [];
+
+  // Check for cancellation before starting
+  if (signal?.aborted) {
+    throw new OperationCancelledError();
+  }
 
   switch (method) {
     case 'pca':
@@ -33,14 +40,14 @@ export async function reduceDimensionality(
         if (onProgress) {
           onProgress({ stage: 'umap', current: p.epoch, total: p.totalEpochs });
         }
-      });
+      }, signal);
 
     case 'tsne':
       return computeTSNE(data, params.tsne, (p) => {
         if (onProgress) {
           onProgress({ stage: 'tsne', current: p.iteration, total: p.totalIterations });
         }
-      });
+      }, signal);
 
     default:
       throw new Error(`Unknown method: ${method}`);

@@ -1,5 +1,6 @@
 import type { Point2D, TSNEParams } from '../../types';
 import type { WorkerMessage, WorkerResponse } from './dr.worker';
+import { OperationCancelledError } from '../fingerprints';
 
 export interface TSNEProgress {
   iteration: number;
@@ -22,7 +23,8 @@ export function getAdaptiveTSNEParams(nSamples: number): Partial<TSNEParams> {
 export async function computeTSNE(
   data: number[][],
   params: TSNEParams,
-  onProgress?: (progress: TSNEProgress) => void
+  onProgress?: (progress: TSNEProgress) => void,
+  signal?: AbortSignal
 ): Promise<Point2D[]> {
   if (data.length === 0) return [];
 
@@ -32,6 +34,19 @@ export async function computeTSNE(
       new URL('./dr.worker.ts', import.meta.url),
       { type: 'module' }
     );
+
+    // Handle abort signal
+    const abortHandler = () => {
+      worker.terminate();
+      reject(new OperationCancelledError());
+    };
+
+    if (signal?.aborted) {
+      reject(new OperationCancelledError());
+      return;
+    }
+
+    signal?.addEventListener('abort', abortHandler);
 
     worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       const { type, progress, result, error } = event.data;
@@ -43,15 +58,18 @@ export async function computeTSNE(
           error: 0,
         });
       } else if (type === 'result' && result) {
+        signal?.removeEventListener('abort', abortHandler);
         worker.terminate();
         resolve(result);
       } else if (type === 'error') {
+        signal?.removeEventListener('abort', abortHandler);
         worker.terminate();
         reject(new Error(error || 'Worker error'));
       }
     };
 
     worker.onerror = (error) => {
+      signal?.removeEventListener('abort', abortHandler);
       worker.terminate();
       reject(new Error(`Worker error: ${error.message}`));
     };

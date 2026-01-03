@@ -4,3 +4,4 @@ export { SettingsPanel } from './SettingsPanel';
 export { ProgressBar } from './ProgressBar';
 export { DatasetInfo } from './DatasetInfo';
 export { ErrorMessage } from './ErrorMessage';
+export { ColumnManager } from './ColumnManager';

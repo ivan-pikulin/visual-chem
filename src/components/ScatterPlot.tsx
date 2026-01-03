@@ -67,6 +67,10 @@ export function ScatterPlot() {
     };
   }, []);
 
+  // Get active columns for dynamic value/label lookup
+  const activeValueColumn = visualization.activeColumns.value;
+  const activeLabelColumn = visualization.activeColumns.label;
+
   const plotData = useMemo(() => {
     if (!dataset) return null;
 
@@ -83,21 +87,51 @@ export function ScatterPlot() {
 
     const x = validMolecules.map((m) => m.coordinates!.x);
     const y = validMolecules.map((m) => m.coordinates!.y);
-    const values = validMolecules.map((m) => m.value);
+
+    // Get values from active value column (dynamic lookup from originalRow)
+    const values = validMolecules.map((m) => {
+      if (activeValueColumn && m.originalRow) {
+        const val = m.originalRow[activeValueColumn];
+        const num = parseFloat(String(val));
+        return !isNaN(num) ? num : undefined;
+      }
+      return m.value; // Fallback to static value
+    });
+
     const smiles = validMolecules.map((m) => m.smiles);
-    const labels = validMolecules.map((m) => m.label);
+
+    // Get labels from active label column (dynamic lookup from originalRow)
+    const labels = validMolecules.map((m) => {
+      if (activeLabelColumn && m.originalRow) {
+        const val = m.originalRow[activeLabelColumn];
+        return val !== null && val !== undefined ? String(val) : undefined;
+      }
+      return m.label; // Fallback to static label
+    });
+
     const groups = validMolecules.map((m) => m.group);
     const clusters = validMolecules.map((m) => m.cluster);
     const isOutliers = validMolecules.map((m) => m.isOutlier);
 
     return { x, y, values, smiles, labels, groups, clusters, isOutliers, molecules: validMolecules };
-  }, [dataset, visualization.showOutliers, outlierSettings.enabled]);
+  }, [dataset, visualization.showOutliers, outlierSettings.enabled, activeValueColumn, activeLabelColumn]);
 
   // Group colors for 'group' color mode
   const GROUP_COLORS = [
     '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
     '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1',
   ];
+
+  // Compute dynamic value range based on active column values
+  const dynamicValueRange = useMemo(() => {
+    if (!plotData) return null;
+    const validValues = plotData.values.filter((v): v is number => v !== undefined);
+    if (validValues.length === 0) return null;
+    return {
+      min: Math.min(...validValues),
+      max: Math.max(...validValues),
+    };
+  }, [plotData]);
 
   // Determine marker colors based on colorMode
   const markerConfig = useMemo(() => {
@@ -129,15 +163,15 @@ export function ScatterPlot() {
         ...baseConfig,
         color: colors,
       };
-    } else if (visualization.colorMode === 'value' && dataset?.valueRange) {
-      // Color by value
+    } else if (visualization.colorMode === 'value' && dynamicValueRange) {
+      // Color by value (using dynamic range from active column)
       const validValues = plotData.values.map(v => v ?? 0);
       return {
         ...baseConfig,
         color: validValues,
         colorscale: 'Inferno',
         colorbar: {
-          title: { text: 'Value', font: { size: 12 } },
+          title: { text: activeValueColumn || 'Value', font: { size: 12 } },
           thickness: 12,
           len: 0.8,
           tickfont: { size: 10 },
@@ -150,7 +184,7 @@ export function ScatterPlot() {
         color: '#3b82f6',
       };
     }
-  }, [plotData, visualization, clustering.enabled, clusterLabels, dataset]);
+  }, [plotData, visualization, clustering.enabled, clusterLabels, dataset, dynamicValueRange, activeValueColumn]);
 
   // Compute which tools to remove (inverse of enabled tools)
   // Cast to any[] because Plotly's types don't include all valid modebar buttons (e.g., drawing tools)
@@ -162,12 +196,18 @@ export function ScatterPlot() {
     (event: Readonly<PlotHoverEvent>) => {
       if (event.points && event.points.length > 0 && plotData) {
         const point = event.points[0];
-        const mol = plotData.molecules[point.pointIndex];
-        setHoveredIndex(point.pointIndex);
+        const pointIdx = point.pointIndex;
+        const mol = plotData.molecules[pointIdx];
+        setHoveredIndex(pointIdx);
+
+        // Get dynamic value and label from plotData (which already did the lookup)
+        const dynamicValue = plotData.values[pointIdx];
+        const dynamicLabel = plotData.labels[pointIdx];
+
         setHoveredMolecule(mol ? {
           smiles: mol.smiles,
-          value: mol.value,
-          label: mol.label,
+          value: dynamicValue,
+          label: dynamicLabel,
           group: mol.group,
           svg: mol.svg,
           cluster: mol.cluster,
@@ -301,7 +341,9 @@ export function ScatterPlot() {
           molecule={hoveredMolecule}
           position={tooltipPos}
           showCluster={clustering.enabled}
-          showValue={dataset?.valueRange !== null}
+          showValue={dynamicValueRange !== null}
+          valueColumnName={activeValueColumn}
+          labelColumnName={activeLabelColumn}
         />
       )}
 
@@ -346,9 +388,18 @@ interface MoleculeTooltipProps {
   position: { x: number; y: number };
   showCluster: boolean;
   showValue: boolean;
+  valueColumnName?: string;
+  labelColumnName?: string;
 }
 
-function MoleculeTooltip({ molecule, position, showCluster, showValue }: MoleculeTooltipProps) {
+function MoleculeTooltip({
+  molecule,
+  position,
+  showCluster,
+  showValue,
+  valueColumnName,
+  labelColumnName,
+}: MoleculeTooltipProps) {
   const tooltipStyle: React.CSSProperties = {
     position: 'fixed',
     left: position.x + 15,
@@ -370,14 +421,17 @@ function MoleculeTooltip({ molecule, position, showCluster, showValue }: Molecul
         </div>
       )}
       {molecule.label && (
-        <p className="molecule-tooltip-label">{molecule.label}</p>
+        <p className="molecule-tooltip-label">
+          {labelColumnName && <span className="molecule-tooltip-col-name">{labelColumnName}: </span>}
+          {molecule.label}
+        </p>
       )}
       <p className="molecule-tooltip-smiles" title={molecule.smiles}>
         {molecule.smiles}
       </p>
       {showValue && molecule.value !== undefined && (
         <p className="molecule-tooltip-value">
-          Value: <span>{molecule.value.toFixed(4)}</span>
+          {valueColumnName || 'Value'}: <span>{molecule.value.toFixed(4)}</span>
         </p>
       )}
       {molecule.group && (

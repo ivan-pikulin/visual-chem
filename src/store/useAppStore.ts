@@ -11,6 +11,8 @@ import type {
   OutlierSettings,
   ToolbarSettings,
   PlotTool,
+  ActiveColumns,
+  ColumnMapping,
 } from '../types';
 
 const defaultTSNEParams: TSNEParams = {
@@ -30,6 +32,7 @@ const defaultVisualization: VisualizationSettings = {
   pointOpacity: 0.8,
   colorMode: 'value',
   showOutliers: true,
+  activeColumns: {},
 };
 
 const defaultClustering: ClusteringSettings = {
@@ -70,6 +73,7 @@ export const useAppStore = create<AppState>((set) => ({
   progressMessage: '',
   error: null,
   needsAnalysis: false,
+  abortController: null,
 
   // Settings
   drMethod: 'umap',
@@ -154,6 +158,24 @@ export const useAppStore = create<AppState>((set) => ({
 
   setNeedsAnalysis: (needsAnalysis: boolean) => set({ needsAnalysis }),
 
+  startOperation: () => {
+    const controller = new AbortController();
+    set({ abortController: controller, isLoading: true, error: null });
+    return controller;
+  },
+
+  cancelOperation: () => set((state) => {
+    if (state.abortController) {
+      state.abortController.abort();
+    }
+    return {
+      abortController: null,
+      isLoading: false,
+      progress: 0,
+      progressMessage: '',
+    };
+  }),
+
   // Actions - DR Settings
   setDRMethod: (drMethod: DimensionalityMethod) => set({ drMethod }),
 
@@ -198,6 +220,187 @@ export const useAppStore = create<AppState>((set) => ({
   setHoveredIndex: (hoveredIndex: number | null) => set({ hoveredIndex }),
 
   setSelectedIndices: (selectedIndices: number[]) => set({ selectedIndices }),
+
+  setActiveColumns: (columns: Partial<ActiveColumns>) =>
+    set((state) => ({
+      visualization: {
+        ...state.visualization,
+        activeColumns: { ...state.visualization.activeColumns, ...columns },
+      },
+    })),
+
+  // Actions - Column Mapping
+  updateColumnMapping: (mapping: Partial<ColumnMapping>) =>
+    set((state) => {
+      const activeId = state.activeDatasetId;
+      if (!activeId) return state;
+
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== activeId) return dataset;
+        return {
+          ...dataset,
+          columnMapping: { ...dataset.columnMapping!, ...mapping },
+        };
+      });
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, activeId),
+      };
+    }),
+
+  addValueColumn: (column: string) =>
+    set((state) => {
+      const activeId = state.activeDatasetId;
+      if (!activeId) return state;
+
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== activeId || !dataset.columnMapping) return dataset;
+        const values = dataset.columnMapping.values.includes(column)
+          ? dataset.columnMapping.values
+          : [...dataset.columnMapping.values, column];
+        return {
+          ...dataset,
+          columnMapping: { ...dataset.columnMapping, values },
+        };
+      });
+
+      // If this is the first value column, make it active
+      const activeDataset = datasets.find((d) => d.id === activeId);
+      const shouldSetActive =
+        activeDataset?.columnMapping?.values.length === 1 &&
+        !state.visualization.activeColumns.value;
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, activeId),
+        ...(shouldSetActive && {
+          visualization: {
+            ...state.visualization,
+            activeColumns: { ...state.visualization.activeColumns, value: column },
+          },
+        }),
+      };
+    }),
+
+  removeValueColumn: (column: string) =>
+    set((state) => {
+      const activeId = state.activeDatasetId;
+      if (!activeId) return state;
+
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== activeId || !dataset.columnMapping) return dataset;
+        return {
+          ...dataset,
+          columnMapping: {
+            ...dataset.columnMapping,
+            values: dataset.columnMapping.values.filter((v) => v !== column),
+          },
+        };
+      });
+
+      // If removed column was active, switch to first remaining or undefined
+      const activeDataset = datasets.find((d) => d.id === activeId);
+      const newActiveValue =
+        state.visualization.activeColumns.value === column
+          ? activeDataset?.columnMapping?.values[0]
+          : state.visualization.activeColumns.value;
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, activeId),
+        visualization: {
+          ...state.visualization,
+          activeColumns: { ...state.visualization.activeColumns, value: newActiveValue },
+        },
+      };
+    }),
+
+  addLabelColumn: (column: string) =>
+    set((state) => {
+      const activeId = state.activeDatasetId;
+      if (!activeId) return state;
+
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== activeId || !dataset.columnMapping) return dataset;
+        const labels = dataset.columnMapping.labels.includes(column)
+          ? dataset.columnMapping.labels
+          : [...dataset.columnMapping.labels, column];
+        return {
+          ...dataset,
+          columnMapping: { ...dataset.columnMapping, labels },
+        };
+      });
+
+      // If this is the first label column, make it active
+      const activeDataset = datasets.find((d) => d.id === activeId);
+      const shouldSetActive =
+        activeDataset?.columnMapping?.labels.length === 1 &&
+        !state.visualization.activeColumns.label;
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, activeId),
+        ...(shouldSetActive && {
+          visualization: {
+            ...state.visualization,
+            activeColumns: { ...state.visualization.activeColumns, label: column },
+          },
+        }),
+      };
+    }),
+
+  removeLabelColumn: (column: string) =>
+    set((state) => {
+      const activeId = state.activeDatasetId;
+      if (!activeId) return state;
+
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== activeId || !dataset.columnMapping) return dataset;
+        return {
+          ...dataset,
+          columnMapping: {
+            ...dataset.columnMapping,
+            labels: dataset.columnMapping.labels.filter((l) => l !== column),
+          },
+        };
+      });
+
+      // If removed column was active, switch to first remaining or undefined
+      const activeDataset = datasets.find((d) => d.id === activeId);
+      const newActiveLabel =
+        state.visualization.activeColumns.label === column
+          ? activeDataset?.columnMapping?.labels[0]
+          : state.visualization.activeColumns.label;
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, activeId),
+        visualization: {
+          ...state.visualization,
+          activeColumns: { ...state.visualization.activeColumns, label: newActiveLabel },
+        },
+      };
+    }),
+
+  setGroupColumn: (column: string | undefined) =>
+    set((state) => {
+      const activeId = state.activeDatasetId;
+      if (!activeId) return state;
+
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== activeId || !dataset.columnMapping) return dataset;
+        return {
+          ...dataset,
+          columnMapping: { ...dataset.columnMapping, group: column },
+        };
+      });
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, activeId),
+      };
+    }),
 
   // Actions - Coordinates
   updateCoordinates: (coordinates: Point2D[]) =>
@@ -279,21 +482,27 @@ export const useAppStore = create<AppState>((set) => ({
 
   // Actions - Reset
   reset: () =>
-    set({
-      datasets: [],
-      activeDatasetId: null,
-      dataset: null,
-      isLoading: false,
-      progress: 0,
-      progressMessage: '',
-      error: null,
-      needsAnalysis: false,
-      clusterLabels: null,
-      hoveredIndex: null,
-      selectedIndices: [],
-      visualization: defaultVisualization,
-      toolbar: defaultToolbar,
-      clustering: defaultClustering,
-      outlierSettings: defaultOutlierSettings,
+    set((state) => {
+      if (state.abortController) {
+        state.abortController.abort();
+      }
+      return {
+        datasets: [],
+        activeDatasetId: null,
+        dataset: null,
+        isLoading: false,
+        progress: 0,
+        progressMessage: '',
+        error: null,
+        needsAnalysis: false,
+        abortController: null,
+        clusterLabels: null,
+        hoveredIndex: null,
+        selectedIndices: [],
+        visualization: defaultVisualization,
+        toolbar: defaultToolbar,
+        clustering: defaultClustering,
+        outlierSettings: defaultOutlierSettings,
+      };
     }),
 }));

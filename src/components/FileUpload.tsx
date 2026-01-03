@@ -2,10 +2,10 @@ import { useCallback, useState, useRef } from 'react';
 import Papa from 'papaparse';
 import { useAppStore } from '../store/useAppStore';
 import { initRDKit } from '../lib/rdkit';
-import { computeFingerprints, precomputeSVGs } from '../lib/fingerprints';
+import { computeFingerprints, precomputeSVGs, OperationCancelledError } from '../lib/fingerprints';
 import { getAdaptiveParams } from '../lib/dimensionality';
 import { ColumnMappingDialog } from './ColumnMappingDialog';
-import type { MoleculeData, Dataset, ColumnMapping, ParsedCSVData } from '../types';
+import type { MoleculeData, Dataset, ColumnMapping, ParsedCSVData, ImportOptions, ColumnInfo } from '../types';
 
 export function FileUpload() {
   const {
@@ -16,6 +16,8 @@ export function FileUpload() {
     setTSNEParams,
     setUMAPParams,
     setNeedsAnalysis,
+    startOperation,
+    setActiveColumns,
   } = useAppStore();
 
   const [isDragging, setIsDragging] = useState(false);
@@ -56,26 +58,70 @@ export function FileUpload() {
     [setError]
   );
 
+  // Helper function to select rows based on import options
+  const selectRows = useCallback(
+    (rows: Record<string, unknown>[], options: ImportOptions): Record<string, unknown>[] => {
+      if (!options.limitEnabled || options.limitCount >= rows.length) {
+        return rows;
+      }
+
+      const count = Math.min(options.limitCount, rows.length);
+
+      switch (options.selectionMode) {
+        case 'first':
+          return rows.slice(0, count);
+        case 'last':
+          return rows.slice(-count);
+        case 'random': {
+          // Fisher-Yates shuffle for random selection
+          const shuffled = [...rows];
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          }
+          return shuffled.slice(0, count);
+        }
+        default:
+          return rows.slice(0, count);
+      }
+    },
+    []
+  );
+
   // Process data after column mapping is confirmed
   const processWithMapping = useCallback(
-    async (mapping: ColumnMapping) => {
+    async (mapping: ColumnMapping, importOptions: ImportOptions, columnInfo: ColumnInfo[]) => {
       if (!parsedData) return;
 
-      setLoading(true);
+      const abortController = startOperation();
+      const signal = abortController.signal;
       setProgress(0, 'Initializing RDKit...');
       setParsedData(null); // Close dialog
 
       try {
         // Initialize RDKit
         await initRDKit();
+
+        // Check for cancellation
+        if (signal.aborted) throw new OperationCancelledError();
+
         setProgress(10, 'Processing molecules...');
 
+        // Apply row limit/selection
+        const selectedRows = selectRows(parsedData.rows, importOptions);
+
+        // Get first value and label columns as defaults
+        const defaultValueCol = mapping.values[0];
+        const defaultLabelCol = mapping.labels[0];
+
         // Extract molecule data with original row data
-        const molecules: (MoleculeData & { originalRow: Record<string, unknown>; originalIndex: number })[] = parsedData.rows
+        const molecules: (MoleculeData & { originalRow: Record<string, unknown>; originalIndex: number })[] = selectedRows
           .map((row, index) => {
             const smiles = String(row[mapping.smiles] ?? '').trim();
-            const value = mapping.value ? parseFloat(String(row[mapping.value])) : undefined;
-            const label = mapping.label ? String(row[mapping.label] ?? '') : undefined;
+            // Use first value column as default value for backward compatibility
+            const value = defaultValueCol ? parseFloat(String(row[defaultValueCol])) : undefined;
+            // Use first label column as default label
+            const label = defaultLabelCol ? String(row[defaultLabelCol] ?? '') : undefined;
             const group = mapping.group ? String(row[mapping.group] ?? '') : undefined;
 
             return {
@@ -102,7 +148,7 @@ export function FileUpload() {
             percent,
             `Computing fingerprints: ${p.current}/${p.total} (${p.validCount} valid)`
           );
-        });
+        }, signal);
 
         const validMolecules = processed.filter((m) => m.isValid);
         if (validMolecules.length === 0) {
@@ -119,11 +165,11 @@ export function FileUpload() {
         const finalMolecules = await precomputeSVGs(processed, (current, total) => {
           const percent = 50 + (current / total) * 45;
           setProgress(percent, `Generating images: ${current}/${total}`);
-        });
+        }, signal);
 
-        // Calculate value range (only if value column was mapped)
+        // Calculate value range (only if value columns were mapped)
         let valueRange: { min: number; max: number } | null = null;
-        if (mapping.value) {
+        if (mapping.values.length > 0) {
           const values = finalMolecules
             .filter((m) => m.isValid && m.value !== undefined)
             .map((m) => m.value!);
@@ -155,19 +201,32 @@ export function FileUpload() {
           csvHeaders: parsedData.headers,
           columnMapping: mapping,
           groups,
+          columnInfo,
         };
 
         setDataset(dataset);
+
+        // Set active columns to first mapped values
+        setActiveColumns({
+          value: mapping.values[0],
+          label: mapping.labels[0],
+        });
+
         setProgress(100, 'File loaded! Configure parameters and run analysis.');
         setNeedsAnalysis(true);
         setLoading(false);
       } catch (error) {
+        // Don't show error for cancelled operations
+        if (error instanceof OperationCancelledError) {
+          console.log('File processing cancelled');
+          return;
+        }
         console.error('Error processing file:', error);
         setError(error instanceof Error ? error.message : 'Unknown error');
         setLoading(false);
       }
     },
-    [parsedData, setDataset, setLoading, setProgress, setError, setTSNEParams, setUMAPParams, setNeedsAnalysis]
+    [parsedData, selectRows, setDataset, setLoading, setProgress, setError, setTSNEParams, setUMAPParams, setNeedsAnalysis, startOperation, setActiveColumns]
   );
 
   const handleCancelMapping = useCallback(() => {

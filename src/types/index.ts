@@ -7,12 +7,35 @@ export interface MoleculeData {
   svg?: string;
 }
 
-// Column mapping for flexible CSV import
+// Column mapping for flexible CSV import (supports multiple value/label columns)
 export interface ColumnMapping {
   smiles: string; // Required - column name containing SMILES
-  value?: string; // Optional - column for numeric value
-  label?: string; // Optional - column for molecule name
-  group?: string; // Optional - column for categorical grouping
+  values: string[]; // Multiple value columns (numeric)
+  labels: string[]; // Multiple label columns (text)
+  group?: string; // Optional - single group column for categorical grouping
+}
+
+// Active columns for visualization (which ones are currently displayed)
+export interface ActiveColumns {
+  value?: string; // Which value column to use for color scale
+  label?: string; // Which label column to show in tooltips
+}
+
+// Column type detection result
+export interface ColumnInfo {
+  name: string;
+  type: 'number' | 'string';
+  sampleValues: string[];
+}
+
+// Row selection mode for import limiting
+export type RowSelectionMode = 'first' | 'last' | 'random';
+
+// Import options for row limiting
+export interface ImportOptions {
+  limitEnabled: boolean;
+  limitCount: number;
+  selectionMode: RowSelectionMode;
 }
 
 // Parsed CSV data before processing
@@ -45,6 +68,7 @@ export interface Dataset {
   csvHeaders?: string[]; // Original CSV column headers
   columnMapping?: ColumnMapping; // How columns were mapped
   groups?: string[]; // Unique group values if group column was mapped
+  columnInfo?: ColumnInfo[]; // Detected column types and samples
 }
 
 export type DimensionalityMethod = 'tsne' | 'umap' | 'pca';
@@ -74,6 +98,7 @@ export interface VisualizationSettings {
   pointOpacity: number;
   colorMode: ColorMode;
   showOutliers: boolean;
+  activeColumns: ActiveColumns; // Which columns are active for visualization
 }
 
 export interface ClusteringSettings {
@@ -126,6 +151,7 @@ export interface AppState {
   progressMessage: string;
   error: string | null;
   needsAnalysis: boolean; // true when data loaded but DR not yet run
+  abortController: AbortController | null; // For cancelling operations
 
   // Settings
   drMethod: DimensionalityMethod;
@@ -160,6 +186,8 @@ export interface AppState {
   setProgress: (progress: number, message?: string) => void;
   setError: (error: string | null) => void;
   setNeedsAnalysis: (needsAnalysis: boolean) => void;
+  startOperation: () => AbortController; // Start a cancellable operation
+  cancelOperation: () => void; // Cancel current operation
 
   // Actions - DR Settings
   setDRMethod: (method: DimensionalityMethod) => void;
@@ -180,6 +208,15 @@ export interface AppState {
   toggleTool: (tool: PlotTool) => void;
   setHoveredIndex: (index: number | null) => void;
   setSelectedIndices: (indices: number[]) => void;
+  setActiveColumns: (columns: Partial<ActiveColumns>) => void;
+
+  // Actions - Column Mapping
+  updateColumnMapping: (mapping: Partial<ColumnMapping>) => void;
+  addValueColumn: (column: string) => void;
+  removeValueColumn: (column: string) => void;
+  addLabelColumn: (column: string) => void;
+  removeLabelColumn: (column: string) => void;
+  setGroupColumn: (column: string | undefined) => void;
 
   // Actions - Coordinates
   updateCoordinates: (coordinates: Point2D[]) => void;

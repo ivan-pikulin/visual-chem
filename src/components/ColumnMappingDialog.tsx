@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import type { ColumnMapping, ParsedCSVData } from '../types';
+import type { ColumnMapping, ParsedCSVData, ImportOptions, RowSelectionMode, ColumnInfo } from '../types';
 
 interface ColumnMappingDialogProps {
   parsedData: ParsedCSVData;
-  onConfirm: (mapping: ColumnMapping) => void;
+  onConfirm: (mapping: ColumnMapping, importOptions: ImportOptions, columnInfo: ColumnInfo[]) => void;
   onCancel: () => void;
 }
 
@@ -16,6 +16,7 @@ const COLUMN_ROLES = [
     color: '#3b82f6',
     icon: '⬡',
     required: true,
+    multiple: false,
     autoDetect: ['smiles', 'smile', 'mol', 'molecule', 'structure'],
   },
   {
@@ -24,6 +25,7 @@ const COLUMN_ROLES = [
     color: '#10b981',
     icon: '#',
     required: false,
+    multiple: true, // Can have multiple value columns
     autoDetect: ['value', 'target', 'activity', 'y', 'ic50', 'pki', 'score', 'affinity'],
   },
   {
@@ -32,6 +34,7 @@ const COLUMN_ROLES = [
     color: '#f59e0b',
     icon: 'A',
     required: false,
+    multiple: true, // Can have multiple label columns
     autoDetect: ['name', 'label', 'id', 'title', 'compound', 'molecule_name', 'mol_name'],
   },
   {
@@ -40,11 +43,52 @@ const COLUMN_ROLES = [
     color: '#8b5cf6',
     icon: '◉',
     required: false,
+    multiple: false, // Only one group column
     autoDetect: ['group', 'category', 'class', 'type', 'series', 'source', 'dataset'],
   },
 ] as const;
 
 type RoleId = (typeof COLUMN_ROLES)[number]['id'];
+
+// Detect column type based on sample values
+function detectColumnType(rows: Record<string, unknown>[], columnName: string): 'number' | 'string' {
+  let numericCount = 0;
+  let totalCount = 0;
+
+  for (const row of rows.slice(0, 100)) { // Sample first 100 rows
+    const val = row[columnName];
+    if (val !== null && val !== undefined && val !== '') {
+      totalCount++;
+      const num = parseFloat(String(val));
+      if (!isNaN(num) && isFinite(num)) {
+        numericCount++;
+      }
+    }
+  }
+
+  // If >80% of non-empty values are numeric, consider it a number column
+  return totalCount > 0 && numericCount / totalCount > 0.8 ? 'number' : 'string';
+}
+
+// Get sample values for a column
+function getSampleValues(rows: Record<string, unknown>[], columnName: string, maxSamples = 5): string[] {
+  const samples: string[] = [];
+  const seen = new Set<string>();
+
+  for (const row of rows) {
+    const val = row[columnName];
+    if (val !== null && val !== undefined && val !== '') {
+      const strVal = String(val);
+      if (!seen.has(strVal) && strVal.length < 50) {
+        seen.add(strVal);
+        samples.push(strVal);
+        if (samples.length >= maxSamples) break;
+      }
+    }
+  }
+
+  return samples;
+}
 
 const ROWS_PER_PAGE = 8;
 
@@ -55,9 +99,33 @@ export function ColumnMappingDialog({
 }: ColumnMappingDialogProps) {
   const [currentPage, setCurrentPage] = useState(0);
 
+  // Import options state
+  const [importOptions, setImportOptions] = useState<ImportOptions>({
+    limitEnabled: false,
+    limitCount: 1000,
+    selectionMode: 'first',
+  });
+
+  // Detect column info (types and samples)
+  const columnInfo = useMemo((): ColumnInfo[] => {
+    return parsedData.headers.map((header) => ({
+      name: header,
+      type: detectColumnType(parsedData.rows, header),
+      sampleValues: getSampleValues(parsedData.rows, header),
+    }));
+  }, [parsedData.headers, parsedData.rows]);
+
+  // New mapping structure supporting multiple columns
+  interface MappingState {
+    smiles?: string;
+    values: string[];
+    labels: string[];
+    group?: string;
+  }
+
   // Auto-detect columns based on header names
-  const autoDetectedMapping = useMemo(() => {
-    const mapping: Partial<Record<RoleId, string>> = {};
+  const autoDetectedMapping = useMemo((): MappingState => {
+    const mapping: MappingState = { values: [], labels: [] };
     const usedColumns = new Set<string>();
 
     for (const role of COLUMN_ROLES) {
@@ -69,9 +137,18 @@ export function ColumnMappingDialog({
           ) &&
           !usedColumns.has(header)
         ) {
-          mapping[role.id] = header;
+          if (role.id === 'smiles') {
+            mapping.smiles = header;
+          } else if (role.id === 'value') {
+            mapping.values.push(header);
+          } else if (role.id === 'label') {
+            mapping.labels.push(header);
+          } else if (role.id === 'group') {
+            mapping.group = header;
+          }
           usedColumns.add(header);
-          break;
+          // For non-multiple roles, break after first match
+          if (!role.multiple) break;
         }
       }
     }
@@ -79,53 +156,83 @@ export function ColumnMappingDialog({
     return mapping;
   }, [parsedData.headers]);
 
-  const [mapping, setMapping] = useState<Partial<Record<RoleId, string>>>(autoDetectedMapping);
+  const [mapping, setMapping] = useState<MappingState>(autoDetectedMapping);
 
-  // Reverse mapping: column name -> role
-  const columnToRole = useMemo(() => {
-    const result: Record<string, RoleId> = {};
-    for (const [roleId, colName] of Object.entries(mapping)) {
-      if (colName) {
-        result[colName] = roleId as RoleId;
-      }
+  // Reverse mapping: column name -> role(s)
+  const columnToRoles = useMemo(() => {
+    const result: Record<string, RoleId[]> = {};
+
+    if (mapping.smiles) {
+      result[mapping.smiles] = ['smiles'];
     }
+    for (const col of mapping.values) {
+      result[col] = [...(result[col] || []), 'value'];
+    }
+    for (const col of mapping.labels) {
+      result[col] = [...(result[col] || []), 'label'];
+    }
+    if (mapping.group) {
+      result[mapping.group] = [...(result[mapping.group] || []), 'group'];
+    }
+
     return result;
   }, [mapping]);
 
-  const handleColumnRoleChange = (columnName: string, roleId: RoleId | '') => {
+  const handleColumnRoleToggle = (columnName: string, roleId: RoleId) => {
     setMapping((prev) => {
-      const next = { ...prev };
+      const next = { ...prev, values: [...prev.values], labels: [...prev.labels] };
 
-      // Remove this column from any existing role
-      for (const key of Object.keys(next) as RoleId[]) {
-        if (next[key] === columnName) {
-          delete next[key];
+      if (roleId === 'smiles') {
+        // SMILES is exclusive - only one column
+        next.smiles = next.smiles === columnName ? undefined : columnName;
+      } else if (roleId === 'value') {
+        // Toggle value column
+        if (next.values.includes(columnName)) {
+          next.values = next.values.filter((v) => v !== columnName);
+        } else {
+          next.values.push(columnName);
         }
-      }
-
-      // If selecting a role (not "none"), also remove any other column from that role
-      if (roleId !== '') {
-        // Assign new role
-        next[roleId] = columnName;
+      } else if (roleId === 'label') {
+        // Toggle label column
+        if (next.labels.includes(columnName)) {
+          next.labels = next.labels.filter((l) => l !== columnName);
+        } else {
+          next.labels.push(columnName);
+        }
+      } else if (roleId === 'group') {
+        // Group is exclusive - only one column
+        next.group = next.group === columnName ? undefined : columnName;
       }
 
       return next;
     });
   };
 
+  // Check if column has a specific role
+  const hasRole = (columnName: string, roleId: RoleId): boolean => {
+    const roles = columnToRoles[columnName];
+    return roles?.includes(roleId) || false;
+  };
+
   const isValid = mapping.smiles !== undefined && mapping.smiles !== '';
+
+  // Calculate effective row count after limit
+  const effectiveRowCount = useMemo(() => {
+    if (!importOptions.limitEnabled) return parsedData.rows.length;
+    return Math.min(importOptions.limitCount, parsedData.rows.length);
+  }, [importOptions.limitEnabled, importOptions.limitCount, parsedData.rows.length]);
 
   const handleConfirm = () => {
     if (!isValid) return;
 
     const columnMapping: ColumnMapping = {
       smiles: mapping.smiles!,
-      value: mapping.value,
-      label: mapping.label,
+      values: mapping.values,
+      labels: mapping.labels,
       group: mapping.group,
     };
 
-    onConfirm(columnMapping);
+    onConfirm(columnMapping, importOptions, columnInfo);
   };
 
   // Pagination
@@ -135,13 +242,23 @@ export function ColumnMappingDialog({
     (currentPage + 1) * ROWS_PER_PAGE
   );
 
-  const getRoleForColumn = (columnName: string) => {
-    const roleId = columnToRole[columnName];
-    return roleId ? COLUMN_ROLES.find(r => r.id === roleId) : null;
+  // Get all roles for a column
+  const getRolesForColumn = (columnName: string) => {
+    const roleIds = columnToRoles[columnName] || [];
+    return roleIds.map((id) => COLUMN_ROLES.find((r) => r.id === id)!);
+  };
+
+  // Get column info by name
+  const getColumnInfo = (columnName: string) => {
+    return columnInfo.find((c) => c.name === columnName);
   };
 
   // Count mapped columns
-  const mappedCount = Object.keys(mapping).length;
+  const mappedCount =
+    (mapping.smiles ? 1 : 0) +
+    mapping.values.length +
+    mapping.labels.length +
+    (mapping.group ? 1 : 0);
 
   return createPortal(
     <div className="cmapper-overlay">
@@ -174,20 +291,40 @@ export function ColumnMappingDialog({
           {/* Role Legend */}
           <div className="cmapper-legend">
             <span className="cmapper-legend-label">Assign roles:</span>
-            {COLUMN_ROLES.map((role) => (
-              <div
-                key={role.id}
-                className={`cmapper-legend-item ${mapping[role.id] ? 'active' : ''}`}
-                style={{ '--role-color': role.color } as React.CSSProperties}
-              >
-                <span className="cmapper-legend-icon">{role.icon}</span>
-                <span className="cmapper-legend-name">{role.label}</span>
-                {role.required && <span className="cmapper-legend-required">*</span>}
-                {mapping[role.id] && (
-                  <span className="cmapper-legend-check">✓</span>
-                )}
-              </div>
-            ))}
+            {COLUMN_ROLES.map((role) => {
+              const count =
+                role.id === 'smiles'
+                  ? mapping.smiles
+                    ? 1
+                    : 0
+                  : role.id === 'value'
+                    ? mapping.values.length
+                    : role.id === 'label'
+                      ? mapping.labels.length
+                      : mapping.group
+                        ? 1
+                        : 0;
+              const isActive = count > 0;
+
+              return (
+                <div
+                  key={role.id}
+                  className={`cmapper-legend-item ${isActive ? 'active' : ''}`}
+                  style={{ '--role-color': role.color } as React.CSSProperties}
+                >
+                  <span className="cmapper-legend-icon">{role.icon}</span>
+                  <span className="cmapper-legend-name">{role.label}</span>
+                  {role.required && <span className="cmapper-legend-required">*</span>}
+                  {role.multiple && count > 1 && (
+                    <span className="cmapper-legend-count">{count}</span>
+                  )}
+                  {isActive && !role.multiple && <span className="cmapper-legend-check">✓</span>}
+                  {isActive && role.multiple && count === 1 && (
+                    <span className="cmapper-legend-check">✓</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </header>
 
@@ -199,41 +336,50 @@ export function ColumnMappingDialog({
                 <tr>
                   <th className="cmapper-row-num">#</th>
                   {parsedData.headers.map((header) => {
-                    const role = getRoleForColumn(header);
+                    const roles = getRolesForColumn(header);
+                    const colInfo = getColumnInfo(header);
+                    const hasAnyRole = roles.length > 0;
+
                     return (
                       <th key={header} className="cmapper-th">
                         <div
-                          className={`cmapper-column-header ${role ? 'has-role' : ''}`}
-                          style={role ? { '--role-color': role.color } as React.CSSProperties : undefined}
+                          className={`cmapper-column-header ${hasAnyRole ? 'has-role' : ''}`}
+                          style={
+                            roles.length > 0
+                              ? ({ '--role-color': roles[0].color } as React.CSSProperties)
+                              : undefined
+                          }
                         >
-                          {/* Role selector dropdown */}
-                          <div className="cmapper-role-selector">
-                            <select
-                              value={columnToRole[header] || ''}
-                              onChange={(e) => handleColumnRoleChange(header, e.target.value as RoleId | '')}
-                              className="cmapper-role-select"
+                          {/* Column name and type */}
+                          <div className="cmapper-column-info">
+                            <span className="cmapper-column-name" title={header}>
+                              {header}
+                            </span>
+                            <span
+                              className="cmapper-column-type"
+                              title={colInfo?.type === 'number' ? 'Numeric column' : 'Text column'}
                             >
-                              <option value="">— Select role —</option>
-                              {COLUMN_ROLES.map((r) => (
-                                <option key={r.id} value={r.id}>
-                                  {r.icon} {r.label}{r.required ? ' *' : ''}
-                                </option>
-                              ))}
-                            </select>
-                            {role && (
-                              <div
-                                className="cmapper-role-badge"
-                                style={{ backgroundColor: role.color }}
-                              >
-                                <span className="cmapper-role-badge-icon">{role.icon}</span>
-                                <span className="cmapper-role-badge-label">{role.label}</span>
-                              </div>
-                            )}
+                              {colInfo?.type === 'number' ? 'Σ' : 'Aa'}
+                            </span>
                           </div>
-                          {/* Column name */}
-                          <span className="cmapper-column-name" title={header}>
-                            {header}
-                          </span>
+
+                          {/* Role toggles */}
+                          <div className="cmapper-role-toggles">
+                            {COLUMN_ROLES.map((role) => {
+                              const isActive = hasRole(header, role.id);
+                              return (
+                                <button
+                                  key={role.id}
+                                  className={`cmapper-role-toggle ${isActive ? 'active' : ''}`}
+                                  style={{ '--role-color': role.color } as React.CSSProperties}
+                                  onClick={() => handleColumnRoleToggle(header, role.id)}
+                                  title={`${isActive ? 'Remove' : 'Assign'} ${role.label} role`}
+                                >
+                                  <span className="cmapper-role-toggle-icon">{role.icon}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </th>
                     );
@@ -247,13 +393,17 @@ export function ColumnMappingDialog({
                     <tr key={absoluteIndex}>
                       <td className="cmapper-row-num">{absoluteIndex + 1}</td>
                       {parsedData.headers.map((header) => {
-                        const role = getRoleForColumn(header);
+                        const roles = getRolesForColumn(header);
                         const value = String(row[header] ?? '');
                         return (
                           <td
                             key={header}
-                            className={`cmapper-td ${role ? 'has-role' : ''}`}
-                            style={role ? { '--role-color': role.color } as React.CSSProperties : undefined}
+                            className={`cmapper-td ${roles.length > 0 ? 'has-role' : ''}`}
+                            style={
+                              roles.length > 0
+                                ? ({ '--role-color': roles[0].color } as React.CSSProperties)
+                                : undefined
+                            }
                           >
                             <span className="cmapper-cell-value" title={value}>
                               {value || <span className="cmapper-empty">—</span>}
@@ -271,6 +421,53 @@ export function ColumnMappingDialog({
 
         {/* Footer */}
         <footer className="cmapper-footer">
+          {/* Row Limit Options */}
+          <div className="cmapper-row-limit">
+            <label className="cmapper-limit-toggle">
+              <input
+                type="checkbox"
+                checked={importOptions.limitEnabled}
+                onChange={(e) =>
+                  setImportOptions((prev) => ({ ...prev, limitEnabled: e.target.checked }))
+                }
+              />
+              <span className="cmapper-limit-toggle-label">Limit rows</span>
+            </label>
+
+            {importOptions.limitEnabled && (
+              <div className="cmapper-limit-controls">
+                <select
+                  value={importOptions.selectionMode}
+                  onChange={(e) =>
+                    setImportOptions((prev) => ({
+                      ...prev,
+                      selectionMode: e.target.value as RowSelectionMode,
+                    }))
+                  }
+                  className="cmapper-limit-mode"
+                >
+                  <option value="first">First</option>
+                  <option value="last">Last</option>
+                  <option value="random">Random</option>
+                </select>
+                <input
+                  type="number"
+                  min={1}
+                  max={parsedData.rows.length}
+                  value={importOptions.limitCount}
+                  onChange={(e) =>
+                    setImportOptions((prev) => ({
+                      ...prev,
+                      limitCount: Math.max(1, parseInt(e.target.value) || 1),
+                    }))
+                  }
+                  className="cmapper-limit-input"
+                />
+                <span className="cmapper-limit-suffix">rows</span>
+              </div>
+            )}
+          </div>
+
           {/* Pagination */}
           <div className="cmapper-pagination">
             <button
@@ -318,7 +515,12 @@ export function ColumnMappingDialog({
             ) : (
               <div className="cmapper-ready">
                 <span className="cmapper-ready-icon">✓</span>
-                <span>Ready to import {parsedData.rows.length} molecules</span>
+                <span>
+                  Ready to import {effectiveRowCount} molecule{effectiveRowCount !== 1 ? 's' : ''}
+                  {importOptions.limitEnabled && effectiveRowCount < parsedData.rows.length && (
+                    <span className="cmapper-limit-note"> (of {parsedData.rows.length})</span>
+                  )}
+                </span>
               </div>
             )}
           </div>

@@ -7,14 +7,27 @@ export interface FingerprintProgress {
   validCount: number;
 }
 
+export class OperationCancelledError extends Error {
+  constructor() {
+    super('Operation cancelled');
+    this.name = 'OperationCancelledError';
+  }
+}
+
 export async function computeFingerprints(
   molecules: MoleculeData[],
-  onProgress?: (progress: FingerprintProgress) => void
+  onProgress?: (progress: FingerprintProgress) => void,
+  signal?: AbortSignal
 ): Promise<ProcessedMolecule[]> {
   const results: ProcessedMolecule[] = [];
   const batchSize = 50;
 
   for (let i = 0; i < molecules.length; i += batchSize) {
+    // Check for cancellation
+    if (signal?.aborted) {
+      throw new OperationCancelledError();
+    }
+
     const batch = molecules.slice(i, Math.min(i + batchSize, molecules.length));
 
     for (const mol of batch) {
@@ -63,7 +76,8 @@ export function getFingerprintMatrix(molecules: ProcessedMolecule[]): number[][]
 
 export async function precomputeSVGs(
   molecules: ProcessedMolecule[],
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  signal?: AbortSignal
 ): Promise<ProcessedMolecule[]> {
   console.log('precomputeSVGs: starting for', molecules.length, 'molecules');
 
@@ -71,6 +85,11 @@ export async function precomputeSVGs(
   const batchSize = 50;
 
   for (let i = 0; i < molecules.length; i += batchSize) {
+    // Check for cancellation
+    if (signal?.aborted) {
+      throw new OperationCancelledError();
+    }
+
     const batch = molecules.slice(i, Math.min(i + batchSize, molecules.length));
 
     for (const mol of batch) {

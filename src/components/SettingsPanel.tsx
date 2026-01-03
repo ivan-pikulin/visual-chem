@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { reduceDimensionality } from '../lib/dimensionality';
+import { OperationCancelledError } from '../lib/fingerprints';
 import { computeKMeans, CLUSTER_COLORS } from '../lib/clustering';
 import { removeOutliers } from '../lib/outliers';
 import { exportInteractiveHTML, exportDataAsCSV, exportSelectedAsCSV } from '../lib/export';
@@ -129,7 +130,15 @@ export function SettingsPanel() {
     setVisualization,
     toolbar,
     toggleTool,
+    startOperation,
+    setActiveColumns,
   } = useAppStore();
+
+  // Get available value and label columns from dataset
+  const valueColumns = dataset?.columnMapping?.values || [];
+  const labelColumns = dataset?.columnMapping?.labels || [];
+  const activeValueColumn = visualization.activeColumns.value;
+  const activeLabelColumn = visualization.activeColumns.label;
 
   const [openSections, setOpenSections] = useState<Set<SectionId>>(
     new Set(['method', 'visualization'])
@@ -153,7 +162,8 @@ export function SettingsPanel() {
     const validMolecules = dataset.molecules.filter((m) => m.isValid);
     if (validMolecules.length === 0) return;
 
-    setLoading(true);
+    const abortController = startOperation();
+    const signal = abortController.signal;
     setProgress(0, `Running ${drMethod.toUpperCase()}...`);
 
     try {
@@ -166,10 +176,14 @@ export function SettingsPanel() {
         (p) => {
           const percent = (p.current / p.total) * 100;
           setProgress(percent, `${p.stage.toUpperCase()}: ${p.current}/${p.total}`);
-        }
+        },
+        signal
       );
 
       updateCoordinates(coordinates);
+
+      // Check for cancellation before continuing
+      if (signal.aborted) throw new OperationCancelledError();
 
       if (clustering.enabled && coordinates.length > 0) {
         setProgress(95, 'Computing clusters...');
@@ -185,16 +199,21 @@ export function SettingsPanel() {
 
       setProgress(100, 'Done!');
       setNeedsAnalysis(false);
+      setLoading(false);
     } catch (error) {
+      // Don't show error for cancelled operations
+      if (error instanceof OperationCancelledError) {
+        console.log('Analysis cancelled');
+        return;
+      }
       console.error('Error in dimensionality reduction:', error);
       setError(error instanceof Error ? error.message : 'Unknown error');
-    } finally {
       setLoading(false);
     }
   }, [
     dataset, drMethod, tsneParams, umapParams, clustering, outlierSettings,
     setLoading, setProgress, updateCoordinates, updateMoleculeClusters,
-    updateMoleculeOutliers, setError, setNeedsAnalysis
+    updateMoleculeOutliers, setError, setNeedsAnalysis, startOperation
   ]);
 
   const handleMethodChange = (method: DimensionalityMethod) => {
@@ -590,9 +609,9 @@ export function SettingsPanel() {
             <div className="color-mode-selector">
               <button
                 onClick={() => setVisualization({ colorMode: 'value' })}
-                disabled={!dataset?.valueRange}
+                disabled={valueColumns.length === 0}
                 className={`color-mode-btn ${visualization.colorMode === 'value' ? 'active' : ''}`}
-                title={!dataset?.valueRange ? 'No value column mapped' : undefined}
+                title={valueColumns.length === 0 ? 'No value column mapped' : undefined}
               >
                 Value
               </button>
@@ -613,6 +632,46 @@ export function SettingsPanel() {
               </button>
             </div>
           </div>
+
+          {/* Value column selector - show when multiple value columns available */}
+          {valueColumns.length > 1 && (
+            <div className="param-group">
+              <div className="param-label">
+                <span className="param-name">Value Column</span>
+              </div>
+              <select
+                className="param-select"
+                value={activeValueColumn || ''}
+                onChange={(e) => setActiveColumns({ value: e.target.value || undefined })}
+              >
+                {valueColumns.map((col) => (
+                  <option key={col} value={col}>
+                    {col}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Label column selector - show when multiple label columns available */}
+          {labelColumns.length > 1 && (
+            <div className="param-group">
+              <div className="param-label">
+                <span className="param-name">Label Column</span>
+              </div>
+              <select
+                className="param-select"
+                value={activeLabelColumn || ''}
+                onChange={(e) => setActiveColumns({ label: e.target.value || undefined })}
+              >
+                {labelColumns.map((col) => (
+                  <option key={col} value={col}>
+                    {col}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {outlierSettings.enabled && (
             <div className="toggle-container">

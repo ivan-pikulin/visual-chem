@@ -1,4 +1,11 @@
-import { useState, useRef, useEffect, useCallback, KeyboardEvent, useMemo } from 'react';
+import { useCallback, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import { useEditor, EditorContent, ReactRenderer } from '@tiptap/react';
+import Document from '@tiptap/extension-document';
+import Paragraph from '@tiptap/extension-paragraph';
+import Text from '@tiptap/extension-text';
+import Mention from '@tiptap/extension-mention';
+import Placeholder from '@tiptap/extension-placeholder';
+import { SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
 
 interface LabelTemplateInputProps {
   value: string;
@@ -7,271 +14,228 @@ interface LabelTemplateInputProps {
   placeholder?: string;
 }
 
-interface Token {
-  type: 'text' | 'column';
-  value: string;
-  start: number;
-  end: number;
+interface MentionListProps {
+  items: string[];
+  command: (props: { id: string }) => void;
 }
 
-// Parse template string into tokens
-function parseTemplate(template: string): Token[] {
-  const tokens: Token[] = [];
-  const regex = /@(\w+)/g;
-  let lastIndex = 0;
-  let match;
+interface MentionListRef {
+  onKeyDown: (props: SuggestionKeyDownProps) => boolean;
+}
 
-  while ((match = regex.exec(template)) !== null) {
-    // Add text before match
-    if (match.index > lastIndex) {
-      tokens.push({
-        type: 'text',
-        value: template.slice(lastIndex, match.index),
-        start: lastIndex,
-        end: match.index,
-      });
+// Mention suggestions dropdown component
+const MentionList = forwardRef<MentionListRef, MentionListProps>(
+  ({ items, command }, ref) => {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+
+    const selectItem = useCallback(
+      (index: number) => {
+        const item = items[index];
+        if (item) {
+          command({ id: item });
+        }
+      },
+      [items, command]
+    );
+
+    useEffect(() => {
+      setSelectedIndex(0);
+    }, [items]);
+
+    useImperativeHandle(ref, () => ({
+      onKeyDown: ({ event }: SuggestionKeyDownProps) => {
+        if (event.key === 'ArrowUp') {
+          setSelectedIndex((prev) => (prev > 0 ? prev - 1 : items.length - 1));
+          return true;
+        }
+        if (event.key === 'ArrowDown') {
+          setSelectedIndex((prev) => (prev < items.length - 1 ? prev + 1 : 0));
+          return true;
+        }
+        if (event.key === 'Enter') {
+          selectItem(selectedIndex);
+          return true;
+        }
+        return false;
+      },
+    }));
+
+    if (items.length === 0) {
+      return null;
     }
-    // Add column reference
-    tokens.push({
-      type: 'column',
-      value: match[1],
-      start: match.index,
-      end: match.index + match[0].length,
-    });
-    lastIndex = match.index + match[0].length;
-  }
 
-  // Add remaining text
-  if (lastIndex < template.length) {
-    tokens.push({
-      type: 'text',
-      value: template.slice(lastIndex),
-      start: lastIndex,
-      end: template.length,
-    });
+    return (
+      <div className="tiptap-mention-dropdown">
+        {items.map((item, index) => (
+          <button
+            key={item}
+            className={`tiptap-mention-item ${index === selectedIndex ? 'selected' : ''}`}
+            onClick={() => selectItem(index)}
+            type="button"
+          >
+            <span className="tiptap-mention-icon">@</span>
+            {item}
+          </button>
+        ))}
+      </div>
+    );
   }
+);
 
-  return tokens;
+MentionList.displayName = 'MentionList';
+
+// Convert editor content to plain text with @mentions
+function editorToTemplate(editor: ReturnType<typeof useEditor>): string {
+  if (!editor) return '';
+
+  const json = editor.getJSON();
+  let result = '';
+
+  const processNode = (node: Record<string, unknown>): void => {
+    if (node.type === 'text') {
+      result += node.text as string;
+    } else if (node.type === 'mention') {
+      const attrs = node.attrs as { id: string } | undefined;
+      result += `@${attrs?.id || ''}`;
+    } else if (node.type === 'paragraph') {
+      if (result.length > 0 && !result.endsWith('\n')) {
+        result += '\n';
+      }
+      const content = node.content as Record<string, unknown>[] | undefined;
+      if (content) {
+        content.forEach(processNode);
+      }
+    } else if (node.type === 'doc') {
+      const content = node.content as Record<string, unknown>[] | undefined;
+      if (content) {
+        content.forEach(processNode);
+      }
+    }
+  };
+
+  processNode(json as Record<string, unknown>);
+  return result.trim();
+}
+
+// Convert plain text template to editor content
+function templateToContent(template: string): string {
+  if (!template) return '<p></p>';
+
+  const lines = template.split('\n');
+  const paragraphs = lines.map((line) => {
+    // Replace @column with mention spans
+    const html = line.replace(/@(\w+)/g, '<span data-type="mention" data-id="$1">@$1</span>');
+    return `<p>${html || '<br>'}</p>`;
+  });
+
+  return paragraphs.join('');
 }
 
 export function LabelTemplateInput({
   value,
   onChange,
   columns,
-  placeholder = 'Type text and @column to add columns...',
+  placeholder = 'Type @ to insert column values...',
 }: LabelTemplateInputProps) {
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestionFilter, setSuggestionFilter] = useState('');
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
-  const [cursorPosition, setCursorPosition] = useState(0);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const [isFocused, setIsFocused] = useState(false);
 
-  // Filter suggestions based on current input after @
-  const filteredSuggestions = useMemo(() => {
-    if (!suggestionFilter) return columns;
-    const filter = suggestionFilter.toLowerCase();
-    return columns.filter((col) => col.toLowerCase().includes(filter));
-  }, [columns, suggestionFilter]);
+  const editor = useEditor({
+    extensions: [
+      Document,
+      Paragraph,
+      Text,
+      Placeholder.configure({
+        placeholder,
+      }),
+      Mention.configure({
+        HTMLAttributes: {
+          class: 'tiptap-mention',
+        },
+        renderHTML({ options, node }) {
+          return [
+            'span',
+            options.HTMLAttributes,
+            `@${node.attrs.id}`,
+          ];
+        },
+        suggestion: {
+          items: ({ query }: { query: string }) => {
+            return columns
+              .filter((col) => col.toLowerCase().includes(query.toLowerCase()))
+              .slice(0, 8);
+          },
+          render: () => {
+            let component: ReactRenderer<MentionListRef> | null = null;
+            let popup: HTMLElement | null = null;
 
-  // Detect @ trigger and show suggestions
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const newValue = e.target.value;
-      const cursorPos = e.target.selectionStart || 0;
+            return {
+              onStart: (props: SuggestionProps) => {
+                component = new ReactRenderer(MentionList, {
+                  props,
+                  editor: props.editor,
+                });
+
+                popup = document.createElement('div');
+                popup.className = 'tiptap-mention-popup';
+                popup.appendChild(component.element);
+
+                const rect = props.clientRect?.();
+                if (rect && popup) {
+                  popup.style.position = 'fixed';
+                  popup.style.left = `${rect.left}px`;
+                  popup.style.top = `${rect.bottom + 4}px`;
+                }
+
+                document.body.appendChild(popup);
+              },
+              onUpdate: (props: SuggestionProps) => {
+                component?.updateProps(props);
+
+                const rect = props.clientRect?.();
+                if (rect && popup) {
+                  popup.style.left = `${rect.left}px`;
+                  popup.style.top = `${rect.bottom + 4}px`;
+                }
+              },
+              onKeyDown: (props: SuggestionKeyDownProps) => {
+                if (props.event.key === 'Escape') {
+                  popup?.remove();
+                  component?.destroy();
+                  return true;
+                }
+                return component?.ref?.onKeyDown(props) ?? false;
+              },
+              onExit: () => {
+                popup?.remove();
+                component?.destroy();
+              },
+            };
+          },
+        },
+      }),
+    ],
+    content: templateToContent(value),
+    onUpdate: ({ editor }) => {
+      const newValue = editorToTemplate(editor);
       onChange(newValue);
-      setCursorPosition(cursorPos);
-
-      // Check if we're typing after @
-      const textBeforeCursor = newValue.slice(0, cursorPos);
-      const atMatch = textBeforeCursor.match(/@(\w*)$/);
-
-      if (atMatch) {
-        setSuggestionFilter(atMatch[1]);
-        setShowSuggestions(true);
-        setSelectedSuggestionIndex(0);
-      } else {
-        setShowSuggestions(false);
-        setSuggestionFilter('');
-      }
     },
-    [onChange]
-  );
+    onFocus: () => setIsFocused(true),
+    onBlur: () => setIsFocused(false),
+  });
 
-  // Insert column reference
-  const insertColumn = useCallback(
-    (column: string) => {
-      const textBeforeCursor = value.slice(0, cursorPosition);
-      const textAfterCursor = value.slice(cursorPosition);
-
-      // Find and replace @partial with @column
-      const atMatch = textBeforeCursor.match(/@(\w*)$/);
-      if (atMatch) {
-        const beforeAt = textBeforeCursor.slice(0, atMatch.index);
-        const newValue = beforeAt + '@' + column + textAfterCursor;
-        onChange(newValue);
-
-        // Move cursor after inserted column
-        const newCursorPos = beforeAt.length + column.length + 1;
-        setTimeout(() => {
-          if (inputRef.current) {
-            inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
-            inputRef.current.focus();
-          }
-        }, 0);
-      }
-
-      setShowSuggestions(false);
-      setSuggestionFilter('');
-    },
-    [value, cursorPosition, onChange]
-  );
-
-  // Handle keyboard navigation in suggestions
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (!showSuggestions) {
-        // Allow normal Enter behavior when suggestions are not shown
-        return;
-      }
-
-      switch (e.key) {
-        case 'ArrowDown':
-          e.preventDefault();
-          setSelectedSuggestionIndex((prev) =>
-            prev < filteredSuggestions.length - 1 ? prev + 1 : prev
-          );
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setSelectedSuggestionIndex((prev) => (prev > 0 ? prev - 1 : prev));
-          break;
-        case 'Enter':
-        case 'Tab':
-          if (filteredSuggestions.length > 0) {
-            e.preventDefault();
-            insertColumn(filteredSuggestions[selectedSuggestionIndex]);
-          }
-          break;
-        case 'Escape':
-          setShowSuggestions(false);
-          break;
-      }
-    },
-    [showSuggestions, filteredSuggestions, selectedSuggestionIndex, insertColumn]
-  );
-
-  // Close suggestions on click outside
+  // Sync external value changes
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        suggestionsRef.current &&
-        !suggestionsRef.current.contains(e.target as Node) &&
-        inputRef.current &&
-        !inputRef.current.contains(e.target as Node)
-      ) {
-        setShowSuggestions(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Scroll selected suggestion into view
-  useEffect(() => {
-    if (showSuggestions && suggestionsRef.current) {
-      const selectedEl = suggestionsRef.current.children[selectedSuggestionIndex] as HTMLElement;
-      if (selectedEl) {
-        selectedEl.scrollIntoView({ block: 'nearest' });
+    if (editor && !editor.isFocused) {
+      const currentValue = editorToTemplate(editor);
+      if (currentValue !== value) {
+        editor.commands.setContent(templateToContent(value));
       }
     }
-  }, [selectedSuggestionIndex, showSuggestions]);
-
-  // Parse for preview rendering
-  const tokens = parseTemplate(value);
-  const hasColumns = tokens.some((t) => t.type === 'column');
+  }, [value, editor]);
 
   return (
-    <div className="label-template-input-container">
-      {/* Preview with styled column badges */}
-      {hasColumns && (
-        <div className="label-template-preview">
-          {tokens.map((token, i) =>
-            token.type === 'column' ? (
-              <span
-                key={i}
-                className={`label-template-column-badge ${
-                  columns.includes(token.value) ? '' : 'invalid'
-                }`}
-                title={columns.includes(token.value) ? token.value : `Column "${token.value}" not found`}
-              >
-                @{token.value}
-              </span>
-            ) : (
-              <span key={i} className="label-template-text">
-                {token.value}
-              </span>
-            )
-          )}
-        </div>
-      )}
-
-      {/* Input field */}
-      <div className="label-template-input-wrapper">
-        <textarea
-          ref={inputRef}
-          className="label-template-input"
-          value={value}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          spellCheck={false}
-          rows={3}
-        />
-
-        {/* Suggestions dropdown */}
-        {showSuggestions && filteredSuggestions.length > 0 && (
-          <div ref={suggestionsRef} className="label-template-suggestions">
-            {filteredSuggestions.map((col, i) => (
-              <div
-                key={col}
-                className={`label-template-suggestion ${i === selectedSuggestionIndex ? 'selected' : ''}`}
-                onClick={() => insertColumn(col)}
-              >
-                <span className="label-template-suggestion-icon">@</span>
-                <span className="label-template-suggestion-text">{col}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Quick column buttons */}
-      <div className="label-template-quick-columns">
-        {columns.slice(0, 6).map((col) => (
-          <button
-            key={col}
-            type="button"
-            className="label-template-quick-column"
-            onClick={() => {
-              // Insert @column at cursor or end
-              const pos = inputRef.current?.selectionStart ?? value.length;
-              const newValue = value.slice(0, pos) + '@' + col + value.slice(pos);
-              onChange(newValue);
-              setTimeout(() => {
-                if (inputRef.current) {
-                  const newPos = pos + col.length + 1;
-                  inputRef.current.setSelectionRange(newPos, newPos);
-                  inputRef.current.focus();
-                }
-              }, 0);
-            }}
-          >
-            @{col}
-          </button>
-        ))}
-      </div>
+    <div className={`tiptap-container ${isFocused ? 'focused' : ''}`}>
+      <EditorContent editor={editor} className="tiptap-editor" />
     </div>
   );
 }

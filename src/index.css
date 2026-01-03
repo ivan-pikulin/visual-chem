@@ -2495,7 +2495,7 @@ td.cmapper-row-num {
 }
 
 /* ========================================
-   LABEL TEMPLATE INPUT
+   LABEL TEMPLATE INPUT (Tiptap)
    ======================================== */
 
 .label-template-input-container {
@@ -2504,139 +2504,108 @@ td.cmapper-row-num {
   gap: 8px;
 }
 
-.label-template-preview {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px;
-  padding: 8px 10px;
-  background: var(--color-border-light);
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 1.6;
-  min-height: 32px;
-}
-
-.label-template-text {
-  color: var(--color-text-secondary);
-  white-space: pre-wrap;
-}
-
-.label-template-column-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  background: var(--color-accent-subtle);
-  border: 1px solid var(--color-accent);
-  border-radius: 4px;
-  color: var(--color-accent);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  font-weight: 500;
-}
-
-.label-template-column-badge.invalid {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: var(--color-error);
-  color: var(--color-error);
-}
-
-.label-template-input-wrapper {
-  position: relative;
-}
-
-.label-template-input {
-  width: 100%;
-  padding: 10px 12px;
-  font-size: 13px;
-  font-family: 'JetBrains Mono', monospace;
+/* Tiptap editor container */
+.tiptap-container {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface);
-  color: var(--color-text-primary);
   transition: all var(--transition-fast);
 }
 
-.label-template-input:hover {
+.tiptap-container:hover {
   border-color: var(--color-accent);
 }
 
-.label-template-input:focus {
-  outline: none;
+.tiptap-container.focused {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px var(--color-accent-subtle);
 }
 
-.label-template-input::placeholder {
+/* Editor content area */
+.tiptap-editor .tiptap {
+  min-height: 72px;
+  padding: 10px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.tiptap-editor .tiptap p {
+  margin: 0;
+}
+
+.tiptap-editor .tiptap p + p {
+  margin-top: 4px;
+}
+
+/* Placeholder */
+.tiptap-editor .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
   color: var(--color-text-tertiary);
   font-family: 'IBM Plex Sans', sans-serif;
 }
 
-/* Suggestions dropdown */
-.label-template-suggestions {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  max-height: 200px;
-  overflow-y: auto;
+/* Mention badge in editor */
+.tiptap-mention {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  margin: 0 1px;
+  background: var(--color-accent-subtle);
+  border: 1px solid var(--color-accent);
+  border-radius: 4px;
+  color: var(--color-accent);
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* Mention suggestions popup */
+.tiptap-mention-popup {
+  position: fixed !important;
+  z-index: 99999 !important;
+}
+
+.tiptap-mention-dropdown {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   box-shadow: var(--shadow-lg);
-  z-index: 1000;
+  min-width: 180px;
+  max-height: 280px;
+  overflow-y: auto;
 }
 
-.label-template-suggestion {
+.tiptap-mention-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  width: 100%;
   padding: 10px 12px;
+  border: none;
+  background: none;
   cursor: pointer;
-  transition: background var(--transition-fast);
-}
-
-.label-template-suggestion:hover,
-.label-template-suggestion.selected {
-  background: var(--color-accent-subtle);
-}
-
-.label-template-suggestion-icon {
-  color: var(--color-accent);
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 600;
-}
-
-.label-template-suggestion-text {
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
   color: var(--color-text-primary);
+  text-align: left;
+  transition: background var(--transition-fast);
 }
 
-/* Quick column buttons */
-.label-template-quick-columns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.label-template-quick-column {
-  padding: 4px 10px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.label-template-quick-column:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+.tiptap-mention-item:hover,
+.tiptap-mention-item.selected {
   background: var(--color-accent-subtle);
+}
+
+.tiptap-mention-icon {
+  color: var(--color-accent);
+  font-weight: 600;
 }
 
 /* Label template presets */
@@ -2644,7 +2613,7 @@ td.cmapper-row-num {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 4px;
   flex-wrap: wrap;
 }
 

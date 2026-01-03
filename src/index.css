@@ -2494,3 +2494,181 @@ td.cmapper-row-num {
   font-size: 10px;
   font-weight: 400;
 }
+
+/* ========================================
+   LABEL TEMPLATE INPUT
+   ======================================== */
+
+.label-template-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label-template-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--color-border-light);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  min-height: 32px;
+}
+
+.label-template-text {
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+}
+
+.label-template-column-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--color-accent-subtle);
+  border: 1px solid var(--color-accent);
+  border-radius: 4px;
+  color: var(--color-accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.label-template-column-badge.invalid {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.label-template-input-wrapper {
+  position: relative;
+}
+
+.label-template-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  transition: all var(--transition-fast);
+}
+
+.label-template-input:hover {
+  border-color: var(--color-accent);
+}
+
+.label-template-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-subtle);
+}
+
+.label-template-input::placeholder {
+  color: var(--color-text-tertiary);
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+
+/* Suggestions dropdown */
+.label-template-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+}
+
+.label-template-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.label-template-suggestion:hover,
+.label-template-suggestion.selected {
+  background: var(--color-accent-subtle);
+}
+
+.label-template-suggestion-icon {
+  color: var(--color-accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+
+.label-template-suggestion-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+/* Quick column buttons */
+.label-template-quick-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.label-template-quick-column {
+  padding: 4px 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.label-template-quick-column:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+/* Label template presets */
+.label-template-presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.label-template-presets-label {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  font-weight: 500;
+}
+
+.label-template-preset-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.label-template-preset-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}

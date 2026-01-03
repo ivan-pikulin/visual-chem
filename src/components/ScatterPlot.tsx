@@ -4,6 +4,7 @@ import createPlotlyComponent from 'react-plotly.js/factory';
 import type { PlotHoverEvent, PlotRelayoutEvent, PlotSelectionEvent } from 'plotly.js';
 import { useAppStore } from '../store/useAppStore';
 import { CLUSTER_COLORS } from '../lib/clustering';
+import { resolveLabelTemplate } from './LabelTemplateInput';
 
 const Plot = createPlotlyComponent(Plotly);
 
@@ -70,6 +71,7 @@ export function ScatterPlot() {
   // Get active columns for dynamic value/label lookup
   const activeValueColumn = visualization.activeColumns.value;
   const activeLabelColumn = visualization.activeColumns.label;
+  const labelTemplate = visualization.activeColumns.labelTemplate;
 
   const plotData = useMemo(() => {
     if (!dataset) return null;
@@ -100,8 +102,14 @@ export function ScatterPlot() {
 
     const smiles = validMolecules.map((m) => m.smiles);
 
-    // Get labels from active label column (dynamic lookup from originalRow)
+    // Get labels: priority is labelTemplate > activeLabelColumn > static label
     const labels = validMolecules.map((m) => {
+      // If template is set, resolve it with originalRow data
+      if (labelTemplate && m.originalRow) {
+        const resolved = resolveLabelTemplate(labelTemplate, m.originalRow);
+        return resolved || undefined;
+      }
+      // Fallback to single column lookup
       if (activeLabelColumn && m.originalRow) {
         const val = m.originalRow[activeLabelColumn];
         return val !== null && val !== undefined ? String(val) : undefined;
@@ -114,7 +122,7 @@ export function ScatterPlot() {
     const isOutliers = validMolecules.map((m) => m.isOutlier);
 
     return { x, y, values, smiles, labels, groups, clusters, isOutliers, molecules: validMolecules };
-  }, [dataset, visualization.showOutliers, outlierSettings.enabled, activeValueColumn, activeLabelColumn]);
+  }, [dataset, visualization.showOutliers, outlierSettings.enabled, activeValueColumn, activeLabelColumn, labelTemplate]);
 
   // Group colors for 'group' color mode
   const GROUP_COLORS = [

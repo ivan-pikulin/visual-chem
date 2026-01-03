@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { reduceDimensionality } from '../lib/dimensionality';
 import { OperationCancelledError } from '../lib/fingerprints';
@@ -6,6 +6,7 @@ import { computeKMeans, CLUSTER_COLORS } from '../lib/clustering';
 import { removeOutliers } from '../lib/outliers';
 import { exportInteractiveHTML, exportDataAsCSV, exportSelectedAsCSV } from '../lib/export';
 import type { DimensionalityMethod, PlotTool } from '../types';
+import { LabelTemplateInput } from './LabelTemplateInput';
 
 // Icons
 const ChevronDownIcon = () => (
@@ -138,7 +139,12 @@ export function SettingsPanel() {
   const valueColumns = dataset?.columnMapping?.values || [];
   const labelColumns = dataset?.columnMapping?.labels || [];
   const activeValueColumn = visualization.activeColumns.value;
-  const activeLabelColumn = visualization.activeColumns.label;
+  const labelTemplate = visualization.activeColumns.labelTemplate || '';
+
+  // Get all available columns from dataset (for template input suggestions)
+  const allColumns = useMemo(() => {
+    return dataset?.csvHeaders || [];
+  }, [dataset?.csvHeaders]);
 
   const [openSections, setOpenSections] = useState<Set<SectionId>>(
     new Set(['method', 'visualization'])
@@ -653,23 +659,37 @@ export function SettingsPanel() {
             </div>
           )}
 
-          {/* Label column selector - show when multiple label columns available */}
-          {labelColumns.length > 1 && (
+          {/* Label template - show when any columns available */}
+          {allColumns.length > 0 && (
             <div className="param-group">
               <div className="param-label">
-                <span className="param-name">Label Column</span>
+                <span className="param-name">Label Template</span>
+                <span className="param-hint">Use @column to insert column values</span>
               </div>
-              <select
-                className="param-select"
-                value={activeLabelColumn || ''}
-                onChange={(e) => setActiveColumns({ label: e.target.value || undefined })}
-              >
-                {labelColumns.map((col) => (
-                  <option key={col} value={col}>
-                    {col}
-                  </option>
-                ))}
-              </select>
+              <LabelTemplateInput
+                value={labelTemplate}
+                onChange={(value) => {
+                  setActiveColumns({ labelTemplate: value });
+                }}
+                columns={allColumns}
+                placeholder="e.g., Name: @name, Value: @logK"
+              />
+              {/* Quick presets from label columns */}
+              {labelColumns.length > 0 && (
+                <div className="label-template-presets">
+                  <span className="label-template-presets-label">Quick:</span>
+                  {labelColumns.slice(0, 4).map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      className="label-template-preset-btn"
+                      onClick={() => setActiveColumns({ labelTemplate: `${col}: @${col}` })}
+                    >
+                      {col}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

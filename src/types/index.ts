@@ -18,7 +18,8 @@ export interface ColumnMapping {
 // Active columns for visualization (which ones are currently displayed)
 export interface ActiveColumns {
   value?: string; // Which value column to use for color scale
-  label?: string; // Which label column to show in tooltips
+  label?: string; // Which label column to show in tooltips (deprecated, use labelTemplate)
+  labelTemplate?: string; // Template string with @column placeholders, e.g., "Name: @name, Value: @logK"
 }
 
 // Column type detection result

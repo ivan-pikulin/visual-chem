@@ -351,7 +351,6 @@ export function ScatterPlot() {
           showCluster={clustering.enabled}
           showValue={dynamicValueRange !== null}
           valueColumnName={activeValueColumn}
-          labelColumnName={activeLabelColumn}
         />
       )}
 
@@ -397,7 +396,6 @@ interface MoleculeTooltipProps {
   showCluster: boolean;
   showValue: boolean;
   valueColumnName?: string;
-  labelColumnName?: string;
 }
 
 function MoleculeTooltip({
@@ -406,7 +404,6 @@ function MoleculeTooltip({
   showCluster,
   showValue,
   valueColumnName,
-  labelColumnName,
 }: MoleculeTooltipProps) {
   const tooltipStyle: React.CSSProperties = {
     position: 'fixed',
@@ -430,7 +427,6 @@ function MoleculeTooltip({
       )}
       {molecule.label && (
         <p className="molecule-tooltip-label">
-          {labelColumnName && <span className="molecule-tooltip-col-name">{labelColumnName}: </span>}
           {molecule.label}
         </p>
       )}

@@ -18,6 +18,7 @@ function App() {
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [leftTab, setLeftTab] = useState<LeftSidebarTab>('info');
+  const [showAddDataset, setShowAddDataset] = useState(false);
 
   // Auto-open settings sidebar when file is loaded and needs analysis
   useEffect(() => {
@@ -115,9 +116,26 @@ function App() {
             )}
 
             <div className="sidebar-body">
-              {!dataset && <FileUpload />}
-              {dataset && leftTab === 'info' && <DatasetInfo />}
-              {dataset && leftTab === 'columns' && <ColumnManager />}
+              {!dataset && !showAddDataset && <FileUpload />}
+              {showAddDataset && (
+                <div className="add-dataset-overlay">
+                  <FileUpload
+                    addToExisting
+                    compact
+                    onComplete={() => setShowAddDataset(false)}
+                  />
+                  <button
+                    className="cancel-add-btn"
+                    onClick={() => setShowAddDataset(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              {dataset && !showAddDataset && leftTab === 'info' && (
+                <DatasetInfo onAddDataset={() => setShowAddDataset(true)} />
+              )}
+              {dataset && !showAddDataset && leftTab === 'columns' && <ColumnManager />}
             </div>
           </div>
         </aside>

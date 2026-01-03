@@ -1009,9 +1009,8 @@ input[type="range"]:disabled {
   font-weight: 600;
   color: var(--color-text-primary);
   margin-bottom: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .molecule-tooltip-smiles {
@@ -2671,4 +2670,200 @@ td.cmapper-row-num {
   border-color: var(--color-accent);
   color: var(--color-accent);
   background: var(--color-accent-subtle);
+}
+
+/* ========================================
+   DATASET CARDS
+   ======================================== */
+
+.dataset-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.dataset-card {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  border: 1px solid var(--color-border-light);
+  border-radius: 8px;
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.dataset-card:hover {
+  border-color: var(--color-border);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.dataset-card.active {
+  border-color: var(--dataset-color, var(--color-accent));
+  border-left-width: 3px;
+  background: linear-gradient(to right, color-mix(in srgb, var(--dataset-color, var(--color-accent)) 8%, transparent), transparent);
+}
+
+.dataset-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dataset-card-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dataset-card-name {
+  flex: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dataset-card-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition-fast);
+}
+
+.dataset-card:hover .dataset-card-remove {
+  opacity: 1;
+}
+
+.dataset-card-remove:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-error);
+}
+
+.dataset-card-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 6px;
+  padding-left: 18px;
+}
+
+.dataset-card-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.dataset-card-label {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+/* Add Dataset Button */
+.add-dataset-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border: 2px dashed var(--color-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  margin-bottom: 20px;
+}
+
+.add-dataset-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+/* Dataset Summary */
+.dataset-summary {
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.dataset-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.dataset-summary-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+}
+
+/* Add Dataset Overlay */
+.add-dataset-overlay {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cancel-add-btn {
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cancel-add-btn:hover {
+  border-color: var(--color-text-tertiary);
+  color: var(--color-text-primary);
+}
+
+/* Compact File Upload */
+.file-upload.compact {
+  flex-direction: row;
+  padding: 16px 20px;
+  gap: 10px;
+}
+
+.file-upload-icon-sm {
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-tertiary);
+  transition: color var(--transition-fast);
+}
+
+.file-upload.compact:hover .file-upload-icon-sm,
+.file-upload.compact.dragging .file-upload-icon-sm {
+  color: var(--color-accent);
+}
+
+.file-upload-compact-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
 }

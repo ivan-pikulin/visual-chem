@@ -7,9 +7,20 @@ import { getAdaptiveParams } from '../lib/dimensionality';
 import { ColumnMappingDialog } from './ColumnMappingDialog';
 import type { MoleculeData, Dataset, ColumnMapping, ParsedCSVData, ImportOptions, ColumnInfo } from '../types';
 
-export function FileUpload() {
+interface FileUploadProps {
+  /** If true, adds to existing datasets instead of replacing */
+  addToExisting?: boolean;
+  /** Callback when file is successfully processed */
+  onComplete?: () => void;
+  /** Compact mode for inline use */
+  compact?: boolean;
+}
+
+export function FileUpload({ addToExisting = false, onComplete, compact = false }: FileUploadProps) {
   const {
+    datasets,
     setDataset,
+    addDataset,
     setLoading,
     setProgress,
     setError,
@@ -204,17 +215,27 @@ export function FileUpload() {
           columnInfo,
         };
 
-        setDataset(dataset);
+        // Add or replace dataset
+        if (addToExisting && datasets.length > 0) {
+          addDataset(dataset);
+        } else {
+          setDataset(dataset);
+        }
 
-        // Set active columns to first mapped values
-        setActiveColumns({
-          value: mapping.values[0],
-          label: mapping.labels[0],
-        });
+        // Set active columns to first mapped values (only for first dataset or single dataset)
+        if (!addToExisting || datasets.length === 0) {
+          setActiveColumns({
+            value: mapping.values[0],
+            label: mapping.labels[0],
+          });
+        }
 
         setProgress(100, 'File loaded! Configure parameters and run analysis.');
         setNeedsAnalysis(true);
         setLoading(false);
+
+        // Call completion callback
+        onComplete?.();
       } catch (error) {
         // Don't show error for cancelled operations
         if (error instanceof OperationCancelledError) {
@@ -278,7 +299,7 @@ export function FileUpload() {
   return (
     <>
       <div
-        className={`file-upload ${isDragging ? 'dragging' : ''}`}
+        className={`file-upload ${isDragging ? 'dragging' : ''} ${compact ? 'compact' : ''}`}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -292,29 +313,52 @@ export function FileUpload() {
           className="sr-only"
         />
 
-        <svg
-          className="file-upload-icon"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-          />
-        </svg>
+        {compact ? (
+          <>
+            <svg
+              className="file-upload-icon-sm"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            <span className="file-upload-compact-text">
+              {isDragging ? 'Drop file' : 'Add CSV'}
+            </span>
+          </>
+        ) : (
+          <>
+            <svg
+              className="file-upload-icon"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+              />
+            </svg>
 
-        <p className="file-upload-title">
-          {isDragging ? 'Drop your file here' : 'Upload CSV File'}
-        </p>
-        <p className="file-upload-subtitle">
-          Drag and drop or click to select
-        </p>
-        <span className="file-upload-hint">
-          SMILES required, other columns optional
-        </span>
+            <p className="file-upload-title">
+              {isDragging ? 'Drop your file here' : 'Upload CSV File'}
+            </p>
+            <p className="file-upload-subtitle">
+              Drag and drop or click to select
+            </p>
+            <span className="file-upload-hint">
+              SMILES required, other columns optional
+            </span>
+          </>
+        )}
       </div>
 
       {parsedData && (

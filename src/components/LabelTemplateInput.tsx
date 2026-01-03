@@ -64,7 +64,7 @@ export function LabelTemplateInput({
   const [suggestionFilter, setSuggestionFilter] = useState('');
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const [cursorPosition, setCursorPosition] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   // Filter suggestions based on current input after @
@@ -76,7 +76,7 @@ export function LabelTemplateInput({
 
   // Detect @ trigger and show suggestions
   const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newValue = e.target.value;
       const cursorPos = e.target.selectionStart || 0;
       onChange(newValue);
@@ -129,8 +129,11 @@ export function LabelTemplateInput({
 
   // Handle keyboard navigation in suggestions
   const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (!showSuggestions) return;
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (!showSuggestions) {
+        // Allow normal Enter behavior when suggestions are not shown
+        return;
+      }
 
       switch (e.key) {
         case 'ArrowDown':
@@ -216,15 +219,15 @@ export function LabelTemplateInput({
 
       {/* Input field */}
       <div className="label-template-input-wrapper">
-        <input
+        <textarea
           ref={inputRef}
-          type="text"
           className="label-template-input"
           value={value}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           spellCheck={false}
+          rows={3}
         />
 
         {/* Suggestions dropdown */}

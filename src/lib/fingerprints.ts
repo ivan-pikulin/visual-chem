@@ -61,28 +61,38 @@ export function getFingerprintMatrix(molecules: ProcessedMolecule[]): number[][]
   return molecules.filter((m) => m.isValid).map((m) => m.fingerprint);
 }
 
-export function precomputeSVGs(
+export async function precomputeSVGs(
   molecules: ProcessedMolecule[],
   onProgress?: (current: number, total: number) => void
-): ProcessedMolecule[] {
+): Promise<ProcessedMolecule[]> {
   console.log('precomputeSVGs: starting for', molecules.length, 'molecules');
 
-  const result = molecules.map((mol, i) => {
-    if (onProgress && i % 10 === 0) {
-      onProgress(i, molecules.length);
+  const results: ProcessedMolecule[] = [];
+  const batchSize = 50;
+
+  for (let i = 0; i < molecules.length; i += batchSize) {
+    const batch = molecules.slice(i, Math.min(i + batchSize, molecules.length));
+
+    for (const mol of batch) {
+      if (!mol.isValid) {
+        results.push(mol);
+        continue;
+      }
+
+      const svg = getMoleculeSVG(mol.smiles);
+      results.push({ ...mol, svg: svg ?? undefined });
     }
 
-    if (!mol.isValid) return mol;
-
-    const svg = getMoleculeSVG(mol.smiles);
-    if (i === 0) {
-      console.log('First molecule SVG result:', mol.smiles, svg ? 'OK' : 'NULL');
+    if (onProgress) {
+      onProgress(Math.min(i + batchSize, molecules.length), molecules.length);
     }
-    return { ...mol, svg: svg ?? undefined };
-  });
 
-  const withSvg = result.filter(m => m.svg).length;
+    // Yield to event loop to keep UI responsive
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  const withSvg = results.filter(m => m.svg).length;
   console.log('precomputeSVGs: generated', withSvg, 'SVGs');
 
-  return result;
+  return results;
 }

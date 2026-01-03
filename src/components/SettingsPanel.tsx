@@ -4,7 +4,7 @@ import { reduceDimensionality } from '../lib/dimensionality';
 import { computeKMeans, CLUSTER_COLORS } from '../lib/clustering';
 import { removeOutliers } from '../lib/outliers';
 import { exportInteractiveHTML, exportDataAsCSV, exportSelectedAsCSV } from '../lib/export';
-import type { DimensionalityMethod, ColorMode, PlotTool } from '../types';
+import type { DimensionalityMethod, PlotTool } from '../types';
 
 // Icons
 const ChevronDownIcon = () => (
@@ -220,7 +220,7 @@ export function SettingsPanel() {
 
     const x = validMolecules.map((m) => m.coordinates!.x);
     const y = validMolecules.map((m) => m.coordinates!.y);
-    const values = validMolecules.map((m) => m.value);
+    const values = validMolecules.map((m) => m.value ?? 0);
 
     const plotData: Plotly.Data[] = [{
       type: 'scattergl',
@@ -231,9 +231,9 @@ export function SettingsPanel() {
         size: visualization.pointSize,
         color: visualization.colorMode === 'cluster' && clusterLabels
           ? clusterLabels.map(c => CLUSTER_COLORS[c % CLUSTER_COLORS.length])
-          : values,
-        colorscale: visualization.colorMode === 'value' ? 'Inferno' : undefined,
-        colorbar: visualization.colorMode === 'value' ? { title: { text: 'Value' } } : undefined,
+          : dataset.valueRange ? values : '#3b82f6',
+        colorscale: visualization.colorMode === 'value' && dataset.valueRange ? 'Inferno' : undefined,
+        colorbar: visualization.colorMode === 'value' && dataset.valueRange ? { title: { text: 'Value' } } : undefined,
         opacity: visualization.pointOpacity,
       },
       text: validMolecules.map((m) => m.smiles),
@@ -257,7 +257,9 @@ export function SettingsPanel() {
 
     const data = validMolecules.map((m, i) => ({
       smiles: m.smiles,
-      value: m.value,
+      ...(m.label !== undefined && { label: m.label }),
+      ...(m.value !== undefined && { value: m.value }),
+      ...(m.group !== undefined && { group: m.group }),
       x: m.coordinates!.x,
       y: m.coordinates!.y,
       cluster: clusterLabels ? clusterLabels[i] : undefined,
@@ -586,16 +588,29 @@ export function SettingsPanel() {
               <span className="param-name">Color By</span>
             </div>
             <div className="color-mode-selector">
-              {(['value', 'cluster'] as ColorMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setVisualization({ colorMode: mode })}
-                  disabled={mode === 'cluster' && !clustering.enabled}
-                  className={`color-mode-btn ${visualization.colorMode === mode ? 'active' : ''}`}
-                >
-                  {mode.charAt(0).toUpperCase() + mode.slice(1)}
-                </button>
-              ))}
+              <button
+                onClick={() => setVisualization({ colorMode: 'value' })}
+                disabled={!dataset?.valueRange}
+                className={`color-mode-btn ${visualization.colorMode === 'value' ? 'active' : ''}`}
+                title={!dataset?.valueRange ? 'No value column mapped' : undefined}
+              >
+                Value
+              </button>
+              <button
+                onClick={() => setVisualization({ colorMode: 'group' })}
+                disabled={!dataset?.groups}
+                className={`color-mode-btn ${visualization.colorMode === 'group' ? 'active' : ''}`}
+                title={!dataset?.groups ? 'No group column mapped' : undefined}
+              >
+                Group
+              </button>
+              <button
+                onClick={() => setVisualization({ colorMode: 'cluster' })}
+                disabled={!clustering.enabled}
+                className={`color-mode-btn ${visualization.colorMode === 'cluster' ? 'active' : ''}`}
+              >
+                Cluster
+              </button>
             </div>
           </div>
 

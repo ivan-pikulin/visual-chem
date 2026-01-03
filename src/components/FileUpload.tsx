@@ -4,7 +4,8 @@ import { useAppStore } from '../store/useAppStore';
 import { initRDKit } from '../lib/rdkit';
 import { computeFingerprints, precomputeSVGs } from '../lib/fingerprints';
 import { getAdaptiveParams } from '../lib/dimensionality';
-import type { MoleculeData, Dataset } from '../types';
+import { ColumnMappingDialog } from './ColumnMappingDialog';
+import type { MoleculeData, Dataset, ColumnMapping, ParsedCSVData } from '../types';
 
 export function FileUpload() {
   const {
@@ -18,19 +19,13 @@ export function FileUpload() {
   } = useAppStore();
 
   const [isDragging, setIsDragging] = useState(false);
+  const [parsedData, setParsedData] = useState<ParsedCSVData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const processCSV = useCallback(
+  // Parse CSV and show mapping dialog
+  const parseCSV = useCallback(
     async (file: File) => {
-      setLoading(true);
-      setProgress(0, 'Initializing RDKit...');
-
       try {
-        // Initialize RDKit
-        await initRDKit();
-        setProgress(5, 'Parsing CSV...');
-
-        // Parse CSV
         const text = await file.text();
         const result = Papa.parse<Record<string, string>>(text, {
           header: true,
@@ -46,36 +41,53 @@ export function FileUpload() {
           throw new Error('CSV file is empty');
         }
 
-        // Find SMILES and value columns
-        const smilesCol = Object.keys(data[0]).find(
-          (h) => h.toLowerCase().trim() === 'smiles'
-        );
-        const valueCol = Object.keys(data[0]).find((h) =>
-          ['value', 'target', 'activity', 'y'].includes(h.toLowerCase().trim())
-        );
+        const headers = result.meta.fields || Object.keys(data[0]);
 
-        if (!smilesCol) {
-          throw new Error('No "smiles" column found in CSV');
-        }
+        setParsedData({
+          headers,
+          rows: data as Record<string, unknown>[],
+          fileName: file.name,
+        });
+      } catch (error) {
+        console.error('Error parsing CSV:', error);
+        setError(error instanceof Error ? error.message : 'Unknown error');
+      }
+    },
+    [setError]
+  );
 
-        if (!valueCol) {
-          throw new Error('No "value" column found in CSV (tried: value, target, activity, y)');
-        }
+  // Process data after column mapping is confirmed
+  const processWithMapping = useCallback(
+    async (mapping: ColumnMapping) => {
+      if (!parsedData) return;
 
+      setLoading(true);
+      setProgress(0, 'Initializing RDKit...');
+      setParsedData(null); // Close dialog
+
+      try {
+        // Initialize RDKit
+        await initRDKit();
         setProgress(10, 'Processing molecules...');
 
-        // Get CSV headers for later export
-        const csvHeaders = result.meta.fields || Object.keys(data[0]);
-
         // Extract molecule data with original row data
-        const molecules: (MoleculeData & { originalRow: Record<string, unknown>; originalIndex: number })[] = data
-          .map((row, index) => ({
-            smiles: row[smilesCol]?.trim() || '',
-            value: parseFloat(row[valueCol]) || 0,
-            isValid: false,
-            originalRow: row as Record<string, unknown>,
-            originalIndex: index,
-          }))
+        const molecules: (MoleculeData & { originalRow: Record<string, unknown>; originalIndex: number })[] = parsedData.rows
+          .map((row, index) => {
+            const smiles = String(row[mapping.smiles] ?? '').trim();
+            const value = mapping.value ? parseFloat(String(row[mapping.value])) : undefined;
+            const label = mapping.label ? String(row[mapping.label] ?? '') : undefined;
+            const group = mapping.group ? String(row[mapping.group] ?? '') : undefined;
+
+            return {
+              smiles,
+              value: value !== undefined && !isNaN(value) ? value : undefined,
+              label: label || undefined,
+              group: group || undefined,
+              isValid: false,
+              originalRow: row,
+              originalIndex: index,
+            };
+          })
           .filter((m) => m.smiles.length > 0);
 
         if (molecules.length === 0) {
@@ -103,22 +115,46 @@ export function FileUpload() {
         setUMAPParams(adaptiveParams.umap);
 
         // Generate SVG images for molecules (no coordinates yet)
-        setProgress(80, 'Generating molecule images...');
-        const finalMolecules = precomputeSVGs(processed);
+        setProgress(50, 'Generating molecule images...');
+        const finalMolecules = await precomputeSVGs(processed, (current, total) => {
+          const percent = 50 + (current / total) * 45;
+          setProgress(percent, `Generating images: ${current}/${total}`);
+        });
 
-        // Calculate value range
-        const values = finalMolecules.filter((m) => m.isValid).map((m) => m.value);
-        const valueRange = {
-          min: Math.min(...values),
-          max: Math.max(...values),
-        };
+        // Calculate value range (only if value column was mapped)
+        let valueRange: { min: number; max: number } | null = null;
+        if (mapping.value) {
+          const values = finalMolecules
+            .filter((m) => m.isValid && m.value !== undefined)
+            .map((m) => m.value!);
+          if (values.length > 0) {
+            valueRange = {
+              min: Math.min(...values),
+              max: Math.max(...values),
+            };
+          }
+        }
+
+        // Extract unique groups if group column was mapped
+        let groups: string[] | undefined;
+        if (mapping.group) {
+          const uniqueGroups = new Set<string>();
+          for (const mol of finalMolecules) {
+            if (mol.group) {
+              uniqueGroups.add(mol.group);
+            }
+          }
+          groups = Array.from(uniqueGroups).sort();
+        }
 
         const dataset: Dataset = {
           id: crypto.randomUUID(),
           molecules: finalMolecules,
           valueRange,
-          name: file.name,
-          csvHeaders,
+          name: parsedData.fileName,
+          csvHeaders: parsedData.headers,
+          columnMapping: mapping,
+          groups,
         };
 
         setDataset(dataset);
@@ -131,8 +167,12 @@ export function FileUpload() {
         setLoading(false);
       }
     },
-    [setDataset, setLoading, setProgress, setError, setTSNEParams, setUMAPParams, setNeedsAnalysis]
+    [parsedData, setDataset, setLoading, setProgress, setError, setTSNEParams, setUMAPParams, setNeedsAnalysis]
   );
+
+  const handleCancelMapping = useCallback(() => {
+    setParsedData(null);
+  }, []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -142,12 +182,12 @@ export function FileUpload() {
       const file = e.dataTransfer.files[0];
       console.log('Dropped file:', file?.name, file?.type);
       if (file && (file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv')) {
-        processCSV(file);
+        parseCSV(file);
       } else {
         setError(`Please drop a CSV file (got: ${file?.name || 'no file'})`);
       }
     },
-    [processCSV, setError]
+    [parseCSV, setError]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -164,10 +204,12 @@ export function FileUpload() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-        processCSV(file);
+        parseCSV(file);
       }
+      // Reset input value so the same file can be selected again
+      e.target.value = '';
     },
-    [processCSV]
+    [parseCSV]
   );
 
   const handleClick = useCallback(() => {
@@ -175,44 +217,54 @@ export function FileUpload() {
   }, []);
 
   return (
-    <div
-      className={`file-upload ${isDragging ? 'dragging' : ''}`}
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onClick={handleClick}
-    >
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".csv"
-        onChange={handleFileSelect}
-        className="sr-only"
-      />
-
-      <svg
-        className="file-upload-icon"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
+    <>
+      <div
+        className={`file-upload ${isDragging ? 'dragging' : ''}`}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onClick={handleClick}
       >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          onChange={handleFileSelect}
+          className="sr-only"
         />
-      </svg>
 
-      <p className="file-upload-title">
-        {isDragging ? 'Drop your file here' : 'Upload CSV File'}
-      </p>
-      <p className="file-upload-subtitle">
-        Drag and drop or click to select
-      </p>
-      <span className="file-upload-hint">
-        smiles, value
-      </span>
-    </div>
+        <svg
+          className="file-upload-icon"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+          />
+        </svg>
+
+        <p className="file-upload-title">
+          {isDragging ? 'Drop your file here' : 'Upload CSV File'}
+        </p>
+        <p className="file-upload-subtitle">
+          Drag and drop or click to select
+        </p>
+        <span className="file-upload-hint">
+          SMILES required, other columns optional
+        </span>
+      </div>
+
+      {parsedData && (
+        <ColumnMappingDialog
+          parsedData={parsedData}
+          onConfirm={processWithMapping}
+          onCancel={handleCancelMapping}
+        />
+      )}
+    </>
   );
 }

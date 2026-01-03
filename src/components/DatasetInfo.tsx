@@ -61,14 +61,27 @@ export function DatasetInfo() {
           </div>
         )}
 
-        <div className="stat-divider" />
+        {dataset.valueRange && (
+          <>
+            <div className="stat-divider" />
+            <div className="stat-row">
+              <span className="stat-label">Value range</span>
+              <span className="stat-value">
+                {dataset.valueRange.min.toFixed(3)} — {dataset.valueRange.max.toFixed(3)}
+              </span>
+            </div>
+          </>
+        )}
 
-        <div className="stat-row">
-          <span className="stat-label">Value range</span>
-          <span className="stat-value">
-            {dataset.valueRange.min.toFixed(3)} — {dataset.valueRange.max.toFixed(3)}
-          </span>
-        </div>
+        {dataset.groups && dataset.groups.length > 0 && (
+          <>
+            <div className="stat-divider" />
+            <div className="stat-row">
+              <span className="stat-label">Groups</span>
+              <span className="stat-value">{dataset.groups.length}</span>
+            </div>
+          </>
+        )}
 
         {clustering.enabled && clusterLabels && (
           <>

@@ -1,8 +1,25 @@
 export interface MoleculeData {
   smiles: string;
-  value: number;
+  value?: number; // Optional - for color scale
+  label?: string; // Optional - molecule name/identifier
+  group?: string; // Optional - categorical grouping
   isValid: boolean;
   svg?: string;
+}
+
+// Column mapping for flexible CSV import
+export interface ColumnMapping {
+  smiles: string; // Required - column name containing SMILES
+  value?: string; // Optional - column for numeric value
+  label?: string; // Optional - column for molecule name
+  group?: string; // Optional - column for categorical grouping
+}
+
+// Parsed CSV data before processing
+export interface ParsedCSVData {
+  headers: string[];
+  rows: Record<string, unknown>[];
+  fileName: string;
 }
 
 export interface Point2D {
@@ -22,10 +39,12 @@ export interface ProcessedMolecule extends MoleculeData {
 export interface Dataset {
   id: string;
   molecules: ProcessedMolecule[];
-  valueRange: { min: number; max: number };
+  valueRange: { min: number; max: number } | null; // null if no value column
   name: string;
   color?: string;
   csvHeaders?: string[]; // Original CSV column headers
+  columnMapping?: ColumnMapping; // How columns were mapped
+  groups?: string[]; // Unique group values if group column was mapped
 }
 
 export type DimensionalityMethod = 'tsne' | 'umap' | 'pca';
@@ -48,7 +67,7 @@ export interface PCAParams {
 
 export type DRParams = TSNEParams | UMAPParams | PCAParams;
 
-export type ColorMode = 'value' | 'cluster' | 'dataset';
+export type ColorMode = 'value' | 'cluster' | 'dataset' | 'group';
 
 export interface VisualizationSettings {
   pointSize: number;

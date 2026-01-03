@@ -42,7 +42,9 @@ export function ScatterPlot() {
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
   const [hoveredMolecule, setHoveredMolecule] = useState<{
     smiles: string;
-    value: number;
+    value?: number;
+    label?: string;
+    group?: string;
     svg?: string;
     cluster?: number;
     isOutlier?: boolean;
@@ -83,11 +85,19 @@ export function ScatterPlot() {
     const y = validMolecules.map((m) => m.coordinates!.y);
     const values = validMolecules.map((m) => m.value);
     const smiles = validMolecules.map((m) => m.smiles);
+    const labels = validMolecules.map((m) => m.label);
+    const groups = validMolecules.map((m) => m.group);
     const clusters = validMolecules.map((m) => m.cluster);
     const isOutliers = validMolecules.map((m) => m.isOutlier);
 
-    return { x, y, values, smiles, clusters, isOutliers, molecules: validMolecules };
+    return { x, y, values, smiles, labels, groups, clusters, isOutliers, molecules: validMolecules };
   }, [dataset, visualization.showOutliers, outlierSettings.enabled]);
+
+  // Group colors for 'group' color mode
+  const GROUP_COLORS = [
+    '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
+    '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1',
+  ];
 
   // Determine marker colors based on colorMode
   const markerConfig = useMemo(() => {
@@ -107,11 +117,24 @@ export function ScatterPlot() {
         ...baseConfig,
         color: colors,
       };
-    } else {
-      // Color by value (default)
+    } else if (visualization.colorMode === 'group' && dataset?.groups) {
+      // Color by group
+      const groupIndexMap = new Map(dataset.groups.map((g, i) => [g, i]));
+      const colors = plotData.groups.map((g) => {
+        if (g === undefined) return '#ccc';
+        const idx = groupIndexMap.get(g) ?? 0;
+        return GROUP_COLORS[idx % GROUP_COLORS.length];
+      });
       return {
         ...baseConfig,
-        color: plotData.values,
+        color: colors,
+      };
+    } else if (visualization.colorMode === 'value' && dataset?.valueRange) {
+      // Color by value
+      const validValues = plotData.values.map(v => v ?? 0);
+      return {
+        ...baseConfig,
+        color: validValues,
         colorscale: 'Inferno',
         colorbar: {
           title: { text: 'Value', font: { size: 12 } },
@@ -120,8 +143,14 @@ export function ScatterPlot() {
           tickfont: { size: 10 },
         },
       };
+    } else {
+      // No value column - use uniform color
+      return {
+        ...baseConfig,
+        color: '#3b82f6',
+      };
     }
-  }, [plotData, visualization, clustering.enabled, clusterLabels]);
+  }, [plotData, visualization, clustering.enabled, clusterLabels, dataset]);
 
   // Compute which tools to remove (inverse of enabled tools)
   // Cast to any[] because Plotly's types don't include all valid modebar buttons (e.g., drawing tools)
@@ -138,6 +167,8 @@ export function ScatterPlot() {
         setHoveredMolecule(mol ? {
           smiles: mol.smiles,
           value: mol.value,
+          label: mol.label,
+          group: mol.group,
           svg: mol.svg,
           cluster: mol.cluster,
           isOutlier: mol.isOutlier,
@@ -270,12 +301,18 @@ export function ScatterPlot() {
           molecule={hoveredMolecule}
           position={tooltipPos}
           showCluster={clustering.enabled}
+          showValue={dataset?.valueRange !== null}
         />
       )}
 
       {/* Cluster legend */}
       {visualization.colorMode === 'cluster' && clustering.enabled && clusterLabels && (
         <ClusterLegend nClusters={clustering.nClusters} clusterLabels={clusterLabels} />
+      )}
+
+      {/* Group legend */}
+      {visualization.colorMode === 'group' && dataset?.groups && (
+        <GroupLegend groups={dataset.groups} molecules={plotData?.molecules || []} />
       )}
 
       {/* Selection indicator */}
@@ -299,16 +336,19 @@ export function ScatterPlot() {
 interface MoleculeTooltipProps {
   molecule: {
     smiles: string;
-    value: number;
+    value?: number;
+    label?: string;
+    group?: string;
     svg?: string;
     cluster?: number;
     isOutlier?: boolean;
   };
   position: { x: number; y: number };
   showCluster: boolean;
+  showValue: boolean;
 }
 
-function MoleculeTooltip({ molecule, position, showCluster }: MoleculeTooltipProps) {
+function MoleculeTooltip({ molecule, position, showCluster, showValue }: MoleculeTooltipProps) {
   const tooltipStyle: React.CSSProperties = {
     position: 'fixed',
     left: position.x + 15,
@@ -329,12 +369,22 @@ function MoleculeTooltip({ molecule, position, showCluster }: MoleculeTooltipPro
           No structure
         </div>
       )}
+      {molecule.label && (
+        <p className="molecule-tooltip-label">{molecule.label}</p>
+      )}
       <p className="molecule-tooltip-smiles" title={molecule.smiles}>
         {molecule.smiles}
       </p>
-      <p className="molecule-tooltip-value">
-        Value: <span>{molecule.value.toFixed(4)}</span>
-      </p>
+      {showValue && molecule.value !== undefined && (
+        <p className="molecule-tooltip-value">
+          Value: <span>{molecule.value.toFixed(4)}</span>
+        </p>
+      )}
+      {molecule.group && (
+        <p className="molecule-tooltip-group">
+          Group: <span>{molecule.group}</span>
+        </p>
+      )}
       {showCluster && molecule.cluster !== undefined && (
         <div className="molecule-tooltip-cluster">
           <span
@@ -378,6 +428,49 @@ function ClusterLegend({ nClusters, clusterLabels }: ClusterLegendProps) {
             />
             <span className="cluster-legend-label">
               C{i + 1}: {percent}%
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Group colors for legend (same as in markerConfig)
+const GROUP_COLORS_LEGEND = [
+  '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
+  '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1',
+];
+
+interface GroupLegendProps {
+  groups: string[];
+  molecules: { group?: string }[];
+}
+
+function GroupLegend({ groups, molecules }: GroupLegendProps) {
+  // Calculate group percentages
+  const counts = new Map<string, number>();
+  for (const mol of molecules) {
+    if (mol.group) {
+      counts.set(mol.group, (counts.get(mol.group) || 0) + 1);
+    }
+  }
+  const total = molecules.length;
+
+  return (
+    <div className="cluster-legend">
+      <p className="cluster-legend-title">Groups</p>
+      {groups.map((group, i) => {
+        const count = counts.get(group) || 0;
+        const percent = ((count / total) * 100).toFixed(0);
+        return (
+          <div key={group} className="cluster-legend-item">
+            <span
+              className="cluster-legend-dot"
+              style={{ backgroundColor: GROUP_COLORS_LEGEND[i % GROUP_COLORS_LEGEND.length] }}
+            />
+            <span className="cluster-legend-label" title={group}>
+              {group.length > 12 ? group.slice(0, 10) + '...' : group}: {percent}%
             </span>
           </div>
         );

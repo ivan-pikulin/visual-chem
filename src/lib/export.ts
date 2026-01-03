@@ -86,28 +86,43 @@ export async function exportInteractiveHTML(
 export async function exportDataAsCSV(
   data: Array<{
     smiles: string;
-    value: number;
+    label?: string;
+    value?: number;
+    group?: string;
     x: number;
     y: number;
     cluster?: number;
   }>,
   defaultFilename: string = 'visual-chem-data.csv'
 ): Promise<boolean> {
-  const headers = ['SMILES', 'Value', 'X', 'Y'];
-  if (data.length > 0 && data[0].cluster !== undefined) {
-    headers.push('Cluster');
-  }
+  // Build headers dynamically based on available data
+  const headers = ['SMILES'];
+  const hasLabel = data.some(d => d.label !== undefined);
+  const hasValue = data.some(d => d.value !== undefined);
+  const hasGroup = data.some(d => d.group !== undefined);
+  const hasCluster = data.some(d => d.cluster !== undefined);
+
+  if (hasLabel) headers.push('Label');
+  if (hasValue) headers.push('Value');
+  if (hasGroup) headers.push('Group');
+  headers.push('X', 'Y');
+  if (hasCluster) headers.push('Cluster');
+
+  const escapeCSV = (value: unknown): string => {
+    const str = String(value ?? '');
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
 
   const rows = data.map(row => {
-    const values = [
-      `"${row.smiles.replace(/"/g, '""')}"`,
-      row.value.toString(),
-      row.x.toString(),
-      row.y.toString(),
-    ];
-    if (row.cluster !== undefined) {
-      values.push(row.cluster.toString());
-    }
+    const values = [escapeCSV(row.smiles)];
+    if (hasLabel) values.push(escapeCSV(row.label ?? ''));
+    if (hasValue) values.push(row.value !== undefined ? row.value.toString() : '');
+    if (hasGroup) values.push(escapeCSV(row.group ?? ''));
+    values.push(row.x.toString(), row.y.toString());
+    if (hasCluster) values.push(row.cluster !== undefined ? row.cluster.toString() : '');
     return values.join(',');
   });
 

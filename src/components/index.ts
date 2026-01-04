@@ -5,6 +5,7 @@ export { AnalysisPanel } from './AnalysisPanel';
 export { ProgressBar } from './ProgressBar';
 export { DatasetInfo } from './DatasetInfo';
 export { ErrorMessage } from './ErrorMessage';
-export { ColumnManager } from './ColumnManager';
 export { DataView } from './DataView';
 export { DatasetSelector } from './DatasetSelector';
+export { PlotToolbar } from './PlotToolbar';
+export { PlotSidebar } from './PlotSidebar';

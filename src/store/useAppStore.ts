@@ -14,6 +14,8 @@ import type {
   ActiveColumns,
   ColumnMapping,
   PointShape,
+  DatasetDisplaySettings,
+  DatasetLoadingState,
 } from '../types';
 
 const defaultTSNEParams: TSNEParams = {
@@ -455,6 +457,102 @@ export const useAppStore = create<AppState>((set) => ({
       };
     }),
 
+  setSmilesColumn: (column: string) =>
+    set((state) => {
+      const activeId = state.activeDatasetId;
+      if (!activeId) return state;
+
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== activeId || !dataset.columnMapping) return dataset;
+        return {
+          ...dataset,
+          columnMapping: { ...dataset.columnMapping, smiles: column },
+        };
+      });
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, activeId),
+        needsAnalysis: true, // Changing SMILES requires reprocessing
+      };
+    }),
+
+  // Actions - Dataset Display Settings
+  setDatasetDisplaySettings: (id: string, settings: Partial<DatasetDisplaySettings>) =>
+    set((state) => {
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== id) return dataset;
+        return {
+          ...dataset,
+          displaySettings: { ...dataset.displaySettings, ...settings },
+        };
+      });
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, state.activeDatasetId),
+      };
+    }),
+
+  // Actions - Dataset Loading State
+  setDatasetLoadingState: (id: string, loadingState: Partial<DatasetLoadingState>) =>
+    set((state) => {
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== id) return dataset;
+        return {
+          ...dataset,
+          loadingState: { ...dataset.loadingState, ...loadingState } as DatasetLoadingState,
+        };
+      });
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, state.activeDatasetId),
+      };
+    }),
+
+  // Add a placeholder dataset in loading state
+  addLoadingDataset: (id: string, name: string) =>
+    set((state) => {
+      const colorIndex = state.datasets.length % DATASET_COLORS.length;
+      const newDataset: Dataset = {
+        id,
+        name,
+        molecules: [],
+        valueRange: null,
+        color: DATASET_COLORS[colorIndex],
+        visible: true,
+        pointShape: 'circle',
+        loadingState: {
+          isLoading: true,
+          progress: 0,
+          message: 'Starting...',
+        },
+      };
+      const newDatasets = [...state.datasets, newDataset];
+      const newActiveId = state.activeDatasetId || newDataset.id;
+      return {
+        datasets: newDatasets,
+        activeDatasetId: newActiveId,
+        dataset: getActiveDataset(newDatasets, newActiveId),
+      };
+    }),
+
+  // Update existing dataset (replace placeholder with full data)
+  updateDataset: (id: string, updates: Partial<Dataset>) =>
+    set((state) => {
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== id) return dataset;
+        return { ...dataset, ...updates, loadingState: undefined };
+      });
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, state.activeDatasetId),
+        needsAnalysis: true,
+      };
+    }),
+
   // Actions - Coordinates
   updateCoordinates: (coordinates: Point2D[]) =>
     set((state) => {
@@ -624,6 +722,39 @@ export const useAppStore = create<AppState>((set) => ({
         toolbar: defaultToolbar,
         clustering: defaultClustering,
         outlierSettings: defaultOutlierSettings,
+      };
+    }),
+
+  // Actions - Project
+  loadProjectState: (projectData) =>
+    set((state) => {
+      // Cancel any ongoing operations
+      if (state.abortController) {
+        state.abortController.abort();
+      }
+
+      return {
+        // Project data
+        datasets: projectData.datasets,
+        activeDatasetId: projectData.activeDatasetId,
+        dataset: getActiveDataset(projectData.datasets, projectData.activeDatasetId),
+        drMethod: projectData.drMethod,
+        tsneParams: projectData.tsneParams,
+        umapParams: projectData.umapParams,
+        clustering: projectData.clustering,
+        clusterLabels: projectData.clusterLabels,
+        outlierSettings: projectData.outlierSettings,
+        visualization: projectData.visualization,
+        toolbar: projectData.toolbar,
+        selectedIndices: projectData.selectedIndices,
+        // Reset transient state
+        isLoading: false,
+        progress: 0,
+        progressMessage: '',
+        error: null,
+        needsAnalysis: false,
+        abortController: null,
+        hoveredIndex: null,
       };
     }),
 }));

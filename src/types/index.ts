@@ -22,6 +22,20 @@ export interface ActiveColumns {
   labelTemplate?: string; // Template string with @column placeholders, e.g., "Name: @name, Value: @logK"
 }
 
+// Per-dataset display settings
+export interface DatasetDisplaySettings {
+  labelTemplate?: string; // Template string with @column placeholders
+  valueExpression?: string; // Expression for value calculation, e.g., "@pKi" or "abs(@a - @b)"
+}
+
+// Per-dataset loading state for non-blocking background processing
+export interface DatasetLoadingState {
+  isLoading: boolean;
+  progress: number; // 0-100
+  message: string;
+  error?: string;
+}
+
 // Column type detection result
 export interface ColumnInfo {
   name: string;
@@ -80,6 +94,10 @@ export interface Dataset {
   // Data processing settings
   processLimit?: number; // Max rows to process (null = all)
   totalRows?: number; // Total rows in original CSV
+  // Per-dataset display settings
+  displaySettings?: DatasetDisplaySettings;
+  // Loading state for background processing
+  loadingState?: DatasetLoadingState;
 }
 
 export type DimensionalityMethod = 'tsne' | 'umap' | 'pca';
@@ -151,6 +169,81 @@ export type PlotTool =
 
 export interface ToolbarSettings {
   enabledTools: PlotTool[];
+}
+
+// .vchem project file format types
+export interface VChemManifest {
+  version: string;
+  format: 'vchem';
+  createdAt: string;
+  updatedAt: string;
+  application: {
+    name: string;
+    version: string;
+  };
+  compression: {
+    method: 'deflate';
+    fingerprintsFormat: 'base64';
+    svgCompression: boolean;
+  };
+}
+
+export interface VChemProject {
+  activeDatasetId: string | null;
+  drMethod: DimensionalityMethod;
+  tsneParams: TSNEParams;
+  umapParams: UMAPParams;
+  clustering: ClusteringSettings;
+  clusterLabels: number[] | null;
+  outlierSettings: OutlierSettings;
+  visualization: VisualizationSettings;
+  toolbar: ToolbarSettings;
+  datasetIds: string[];
+}
+
+export interface VChemDatasetMetadata {
+  id: string;
+  name: string;
+  color?: string;
+  visible?: boolean;
+  pointShape?: PointShape;
+  pointSize?: number;
+  valueRange: { min: number; max: number } | null;
+  csvHeaders?: string[];
+  columnMapping?: ColumnMapping;
+  columnInfo?: ColumnInfo[];
+  groups?: string[];
+  displaySettings?: DatasetDisplaySettings;
+  totalRows?: number;
+  moleculeCount: number;
+}
+
+export interface VChemMoleculeData {
+  smiles: string;
+  value?: number;
+  label?: string;
+  group?: string;
+  isValid: boolean;
+  coordinates?: Point2D;
+  cluster?: number;
+  isOutlier?: boolean;
+  originalIndex?: number;
+  originalRow?: Record<string, unknown>;
+}
+
+export interface VChemFingerprints {
+  encoding: 'base64';
+  bitLength: number;
+  data: string[];
+}
+
+export interface VChemImages {
+  compression: 'none';
+  images: Record<string, string>;
+}
+
+export interface VChemState {
+  selectedIndices: number[];
 }
 
 export interface AppState {
@@ -235,6 +328,15 @@ export interface AppState {
   addLabelColumn: (column: string) => void;
   removeLabelColumn: (column: string) => void;
   setGroupColumn: (column: string | undefined) => void;
+  setSmilesColumn: (column: string) => void;
+
+  // Actions - Dataset Display Settings
+  setDatasetDisplaySettings: (id: string, settings: Partial<DatasetDisplaySettings>) => void;
+
+  // Actions - Dataset Loading State
+  setDatasetLoadingState: (id: string, state: Partial<DatasetLoadingState>) => void;
+  addLoadingDataset: (id: string, name: string) => void; // Add placeholder dataset with loading state
+  updateDataset: (id: string, updates: Partial<Dataset>) => void; // Update existing dataset (complete loading)
 
   // Actions - Coordinates
   updateCoordinates: (coordinates: Point2D[]) => void;
@@ -246,4 +348,19 @@ export interface AppState {
 
   // Actions - Reset
   reset: () => void;
+
+  // Actions - Project
+  loadProjectState: (projectData: {
+    datasets: Dataset[];
+    activeDatasetId: string | null;
+    drMethod: DimensionalityMethod;
+    tsneParams: TSNEParams;
+    umapParams: UMAPParams;
+    clustering: ClusteringSettings;
+    clusterLabels: number[] | null;
+    outlierSettings: OutlierSettings;
+    visualization: VisualizationSettings;
+    toolbar: ToolbarSettings;
+    selectedIndices: number[];
+  }) => void;
 }

@@ -1,23 +1,24 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAppStore } from './store/useAppStore';
 import {
   ScatterPlot,
-  SettingsPanel,
   AnalysisPanel,
   ProgressBar,
   ErrorMessage,
   DataView,
-  DatasetSelector,
+  PlotToolbar,
+  PlotSidebar,
 } from './components';
+import { saveProject, loadProject, isVChemFile } from './lib/project';
 import './index.css';
 
 type MainTab = 'data' | 'analysis' | 'plot';
 
 function App() {
-  const { datasets, dataset, needsAnalysis } = useAppStore();
+  const { datasets, dataset, needsAnalysis, setError, loadProjectState } = useAppStore();
   const [mainTab, setMainTab] = useState<MainTab>('data');
-  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-switch to analysis tab when analysis is needed
   useEffect(() => {
@@ -26,6 +27,43 @@ function App() {
     }
   }, [needsAnalysis]);
 
+  // Handle save project
+  const handleSaveProject = useCallback(async () => {
+    try {
+      const state = useAppStore.getState();
+      await saveProject(state);
+    } catch (error) {
+      setError(`Failed to save project: ${error}`);
+    }
+  }, [setError]);
+
+  // Handle open project
+  const handleOpenProject = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  // Handle file selection for project open
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (isVChemFile(file)) {
+      try {
+        const projectData = await loadProject(file);
+        loadProjectState(projectData);
+        // Switch to plot tab if we have coordinates
+        if (projectData.datasets.some(d => d.molecules.some(m => m.coordinates))) {
+          setMainTab('plot');
+        }
+      } catch (error) {
+        setError(`Failed to open project: ${error}`);
+      }
+    }
+
+    // Reset input
+    e.target.value = '';
+  }, [loadProjectState, setError]);
+
   // Switch to plot when first dataset is loaded with coordinates
   useEffect(() => {
     if (dataset?.molecules.some(m => m.coordinates)) {
@@ -33,12 +71,8 @@ function App() {
     }
   }, [dataset?.molecules]);
 
-  const toggleLeftSidebar = useCallback(() => {
-    setLeftSidebarOpen((prev) => !prev);
-  }, []);
-
-  const toggleRightSidebar = useCallback(() => {
-    setRightSidebarOpen((prev) => !prev);
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((prev) => !prev);
   }, []);
 
   const hasData = datasets.length > 0;
@@ -48,18 +82,35 @@ function App() {
       {/* Header with tabs */}
       <header className="app-header">
         <div className="header-left">
-          {mainTab === 'plot' && (
-            <button
-              className={`icon-button ${leftSidebarOpen ? 'active' : ''}`}
-              onClick={toggleLeftSidebar}
-              title="Toggle datasets"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M9 3v18" />
-              </svg>
-            </button>
-          )}
+          {/* Hidden file input for project open */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".vchem"
+            onChange={handleFileChange}
+            style={{ display: 'none' }}
+          />
+          <button
+            className="header-btn"
+            onClick={handleOpenProject}
+            title="Open Project (.vchem)"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+          </button>
+          <button
+            className="header-btn"
+            onClick={handleSaveProject}
+            disabled={datasets.length === 0}
+            title="Save Project (.vchem)"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
+            </svg>
+          </button>
         </div>
 
         {/* Center tabs */}
@@ -103,73 +154,39 @@ function App() {
           </button>
         </div>
 
-        <div className="header-right">
-          {mainTab === 'plot' && (
-            <button
-              className={`icon-button ${rightSidebarOpen ? 'active' : ''}`}
-              onClick={toggleRightSidebar}
-              title="Toggle settings"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-              </svg>
-            </button>
-          )}
-        </div>
+        <div className="header-right" />
       </header>
 
       {/* Main content area */}
       <main className="app-main">
         {mainTab === 'data' ? (
-          <DataView onGoToPlot={() => setMainTab('plot')} />
+          <DataView onGoToAnalysis={() => setMainTab('analysis')} />
         ) : mainTab === 'analysis' ? (
           <div className="analysis-view">
             <div className="analysis-view-content">
-              <AnalysisPanel />
+              <AnalysisPanel
+                onGoToData={(datasetId) => {
+                  if (datasetId) {
+                    useAppStore.getState().setActiveDataset(datasetId);
+                  }
+                  setMainTab('data');
+                }}
+              />
             </div>
           </div>
         ) : (
-          <>
-            {/* Left Sidebar - Dataset Selector */}
-            <aside className={`sidebar sidebar-left ${leftSidebarOpen ? 'open' : ''}`}>
-              <div className="sidebar-content">
-                <div className="sidebar-header">
-                  <h2>Datasets</h2>
-                  <button className="icon-button-sm" onClick={toggleLeftSidebar}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-                <div className="sidebar-body">
-                  <DatasetSelector />
-                </div>
-              </div>
-            </aside>
-
-            {/* Plot Area */}
-            <div className={`plot-container ${leftSidebarOpen ? 'with-left-sidebar' : ''} ${rightSidebarOpen ? 'with-right-sidebar' : ''}`}>
+          <div className="plot-view">
+            {/* Plot Area with floating toolbar */}
+            <div className={`plot-container ${sidebarOpen ? 'with-sidebar' : ''}`}>
               <ScatterPlot />
+              <PlotToolbar onToggleSidebar={toggleSidebar} sidebarOpen={sidebarOpen} />
             </div>
 
-            {/* Right Sidebar - Settings */}
-            <aside className={`sidebar sidebar-right ${rightSidebarOpen ? 'open' : ''}`}>
-              <div className="sidebar-content">
-                <div className="sidebar-header">
-                  <h2>Settings</h2>
-                  <button className="icon-button-sm" onClick={toggleRightSidebar}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-                <div className="sidebar-body">
-                  <SettingsPanel />
-                </div>
-              </div>
+            {/* Unified Sidebar */}
+            <aside className={`plot-sidebar-wrapper ${sidebarOpen ? 'open' : ''}`}>
+              <PlotSidebar onClose={toggleSidebar} />
             </aside>
-          </>
+          </div>
         )}
       </main>
 

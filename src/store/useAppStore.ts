@@ -13,6 +13,7 @@ import type {
   PlotTool,
   ActiveColumns,
   ColumnMapping,
+  PointShape,
 } from '../types';
 
 const defaultTSNEParams: TSNEParams = {
@@ -99,6 +100,8 @@ export const useAppStore = create<AppState>((set) => ({
     const newDataset = {
       ...dataset,
       color: dataset.color || DATASET_COLORS[colorIndex],
+      visible: dataset.visible ?? true,
+      pointShape: dataset.pointShape ?? 'circle',
     };
     const newDatasets = [...state.datasets, newDataset];
     const newActiveId = state.activeDatasetId || newDataset.id;
@@ -107,6 +110,7 @@ export const useAppStore = create<AppState>((set) => ({
       activeDatasetId: newActiveId,
       dataset: getActiveDataset(newDatasets, newActiveId),
       error: null,
+      needsAnalysis: true, // Trigger reanalysis when data is added
     };
   }),
 
@@ -133,6 +137,55 @@ export const useAppStore = create<AppState>((set) => ({
     activeDatasetId: id,
     dataset: getActiveDataset(state.datasets, id),
   })),
+
+  // Actions - Dataset display settings
+  setDatasetVisible: (id: string, visible: boolean) => set((state) => {
+    const datasets = state.datasets.map(d =>
+      d.id === id ? { ...d, visible } : d
+    );
+    return {
+      datasets,
+      dataset: getActiveDataset(datasets, state.activeDatasetId),
+    };
+  }),
+
+  setDatasetPointShape: (id: string, shape: PointShape) => set((state) => {
+    const datasets = state.datasets.map(d =>
+      d.id === id ? { ...d, pointShape: shape } : d
+    );
+    return {
+      datasets,
+      dataset: getActiveDataset(datasets, state.activeDatasetId),
+    };
+  }),
+
+  setDatasetPointSize: (id: string, size: number | undefined) => set((state) => {
+    const datasets = state.datasets.map(d =>
+      d.id === id ? { ...d, pointSize: size } : d
+    );
+    return {
+      datasets,
+      dataset: getActiveDataset(datasets, state.activeDatasetId),
+    };
+  }),
+
+  setDatasetColor: (id: string, color: string) => set((state) => {
+    const datasets = state.datasets.map(d =>
+      d.id === id ? { ...d, color } : d
+    );
+    return {
+      datasets,
+      dataset: getActiveDataset(datasets, state.activeDatasetId),
+    };
+  }),
+
+  setAllDatasetsVisible: (visible: boolean) => set((state) => {
+    const datasets = state.datasets.map(d => ({ ...d, visible }));
+    return {
+      datasets,
+      dataset: getActiveDataset(datasets, state.activeDatasetId),
+    };
+  }),
 
   // Legacy support - setDataset replaces all datasets with single one
   setDataset: (dataset: Dataset | null) => set(() => {
@@ -424,6 +477,74 @@ export const useAppStore = create<AppState>((set) => ({
       return {
         datasets,
         dataset: getActiveDataset(datasets, activeId),
+      };
+    }),
+
+  // Update coordinates for all datasets at once (for combined analysis)
+  updateAllCoordinates: (coordinatesMap: Map<string, Point2D[]>) =>
+    set((state) => {
+      const datasets = state.datasets.map(dataset => {
+        const coords = coordinatesMap.get(dataset.id);
+        if (!coords) return dataset;
+
+        let coordIndex = 0;
+        const molecules = dataset.molecules.map((mol) => {
+          if (mol.isValid) {
+            return { ...mol, coordinates: coords[coordIndex++] };
+          }
+          return mol;
+        });
+        return { ...dataset, molecules };
+      });
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, state.activeDatasetId),
+      };
+    }),
+
+  // Update clusters for all datasets (combined analysis)
+  updateAllClusters: (clusters: number[]) =>
+    set((state) => {
+      let globalIndex = 0;
+      const datasets = state.datasets.map(dataset => {
+        const molecules = dataset.molecules.map((mol) => {
+          if (mol.isValid && mol.coordinates) {
+            return { ...mol, cluster: clusters[globalIndex++] };
+          }
+          return mol;
+        });
+        return { ...dataset, molecules };
+      });
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, state.activeDatasetId),
+        clusterLabels: clusters,
+      };
+    }),
+
+  // Update outliers for all datasets (combined analysis)
+  updateAllOutliers: (outlierIndices: number[]) =>
+    set((state) => {
+      const outlierSet = new Set(outlierIndices);
+      let globalIndex = 0;
+
+      const datasets = state.datasets.map(dataset => {
+        const molecules = dataset.molecules.map((mol) => {
+          if (mol.isValid && mol.coordinates) {
+            const isOutlier = outlierSet.has(globalIndex);
+            globalIndex++;
+            return { ...mol, isOutlier };
+          }
+          return mol;
+        });
+        return { ...dataset, molecules };
+      });
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, state.activeDatasetId),
       };
     }),
 

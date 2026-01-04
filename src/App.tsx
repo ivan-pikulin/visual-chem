@@ -2,31 +2,36 @@ import { useState, useCallback, useEffect } from 'react';
 import { useAppStore } from './store/useAppStore';
 import {
   ScatterPlot,
-  FileUpload,
   SettingsPanel,
+  AnalysisPanel,
   ProgressBar,
-  DatasetInfo,
   ErrorMessage,
-  ColumnManager,
+  DataView,
+  DatasetSelector,
 } from './components';
 import './index.css';
 
-type LeftSidebarTab = 'info' | 'columns';
+type MainTab = 'data' | 'analysis' | 'plot';
 
 function App() {
-  const { dataset, needsAnalysis } = useAppStore();
+  const { datasets, dataset, needsAnalysis } = useAppStore();
+  const [mainTab, setMainTab] = useState<MainTab>('data');
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
-  const [leftTab, setLeftTab] = useState<LeftSidebarTab>('info');
-  const [showAddDataset, setShowAddDataset] = useState(false);
 
-  // Auto-open settings sidebar when file is loaded and needs analysis
+  // Auto-switch to analysis tab when analysis is needed
   useEffect(() => {
     if (needsAnalysis) {
-      setRightSidebarOpen(true);
-      setLeftSidebarOpen(false);
+      setMainTab('analysis');
     }
   }, [needsAnalysis]);
+
+  // Switch to plot when first dataset is loaded with coordinates
+  useEffect(() => {
+    if (dataset?.molecules.some(m => m.coordinates)) {
+      setMainTab('plot');
+    }
+  }, [dataset?.molecules]);
 
   const toggleLeftSidebar = useCallback(() => {
     setLeftSidebarOpen((prev) => !prev);
@@ -36,141 +41,135 @@ function App() {
     setRightSidebarOpen((prev) => !prev);
   }, []);
 
+  const hasData = datasets.length > 0;
+
   return (
     <div className="app-container">
-      {/* Header */}
+      {/* Header with tabs */}
       <header className="app-header">
         <div className="header-left">
-          <button
-            className="icon-button"
-            onClick={toggleLeftSidebar}
-            title="Toggle data panel"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 12h18M3 6h18M3 18h18" />
-            </svg>
-          </button>
-          <div className="logo">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              {/* Coordinate axes */}
-              <path d="M3 3v18h18" strokeLinecap="round" />
-              {/* Scatter points */}
-              <circle cx="8" cy="16" r="1.5" fill="currentColor" stroke="none" opacity="0.4" />
-              <circle cx="18" cy="8" r="1.5" fill="currentColor" stroke="none" opacity="0.4" />
-              {/* Benzene ring as main element */}
-              <path d="M12 6l3.5 2v4l-3.5 2-3.5-2V8z" strokeLinejoin="round" />
-              <path d="M10.5 8.5l3 0M10.5 11.5l3 0" strokeWidth="1" opacity="0.6" />
-            </svg>
-            <span className="logo-text">VisualChem</span>
-          </div>
-        </div>
-        <div className="header-right">
-          {dataset && (
-            <span className="dataset-badge">
-              {dataset.name}
-            </span>
+          {mainTab === 'plot' && (
+            <button
+              className={`icon-button ${leftSidebarOpen ? 'active' : ''}`}
+              onClick={toggleLeftSidebar}
+              title="Toggle datasets"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 3v18" />
+              </svg>
+            </button>
           )}
+        </div>
+
+        {/* Center tabs */}
+        <div className="header-tabs">
           <button
-            className={`icon-button ${rightSidebarOpen ? 'active' : ''}`}
-            onClick={toggleRightSidebar}
-            title="Toggle settings"
+            className={`header-tab ${mainTab === 'data' ? 'active' : ''}`}
+            onClick={() => setMainTab('data')}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
             </svg>
+            Data
           </button>
+          <button
+            className={`header-tab ${mainTab === 'analysis' ? 'active' : ''} ${!hasData ? 'disabled' : ''} ${needsAnalysis && hasData ? 'attention' : ''}`}
+            onClick={() => hasData && setMainTab('analysis')}
+            disabled={!hasData}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Analysis
+            {needsAnalysis && hasData && <span className="tab-badge" />}
+          </button>
+          <button
+            className={`header-tab ${mainTab === 'plot' ? 'active' : ''} ${!hasData ? 'disabled' : ''}`}
+            onClick={() => hasData && setMainTab('plot')}
+            disabled={!hasData}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="7.5" cy="7.5" r="2" />
+              <circle cx="16.5" cy="16.5" r="2" />
+              <circle cx="18" cy="6" r="1.5" />
+              <circle cx="6" cy="18" r="1.5" />
+              <circle cx="12" cy="12" r="1.5" />
+            </svg>
+            Plot
+          </button>
+        </div>
+
+        <div className="header-right">
+          {mainTab === 'plot' && (
+            <button
+              className={`icon-button ${rightSidebarOpen ? 'active' : ''}`}
+              onClick={toggleRightSidebar}
+              title="Toggle settings"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+              </svg>
+            </button>
+          )}
         </div>
       </header>
 
       {/* Main content area */}
       <main className="app-main">
-        {/* Left Sidebar - Data */}
-        <aside className={`sidebar sidebar-left ${leftSidebarOpen ? 'open' : ''}`}>
-          <div className="sidebar-content">
-            <div className="sidebar-header">
-              <h2>Data</h2>
-              <button className="icon-button-sm" onClick={toggleLeftSidebar}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
+        {mainTab === 'data' ? (
+          <DataView onGoToPlot={() => setMainTab('plot')} />
+        ) : mainTab === 'analysis' ? (
+          <div className="analysis-view">
+            <div className="analysis-view-content">
+              <AnalysisPanel />
             </div>
-
-            {/* Tab switcher - only show when dataset is loaded */}
-            {dataset && (
-              <div className="sidebar-tabs">
-                <button
-                  className={`sidebar-tab ${leftTab === 'info' ? 'active' : ''}`}
-                  onClick={() => setLeftTab('info')}
-                >
-                  Info
-                </button>
-                <button
-                  className={`sidebar-tab ${leftTab === 'columns' ? 'active' : ''}`}
-                  onClick={() => setLeftTab('columns')}
-                >
-                  Columns
-                </button>
-              </div>
-            )}
-
-            <div className="sidebar-body">
-              {!dataset && !showAddDataset && <FileUpload />}
-              {showAddDataset && (
-                <div className="add-dataset-overlay">
-                  <FileUpload
-                    addToExisting
-                    compact
-                    onComplete={() => setShowAddDataset(false)}
-                  />
-                  <button
-                    className="cancel-add-btn"
-                    onClick={() => setShowAddDataset(false)}
-                  >
-                    Cancel
+          </div>
+        ) : (
+          <>
+            {/* Left Sidebar - Dataset Selector */}
+            <aside className={`sidebar sidebar-left ${leftSidebarOpen ? 'open' : ''}`}>
+              <div className="sidebar-content">
+                <div className="sidebar-header">
+                  <h2>Datasets</h2>
+                  <button className="icon-button-sm" onClick={toggleLeftSidebar}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
                   </button>
                 </div>
-              )}
-              {dataset && !showAddDataset && leftTab === 'info' && (
-                <DatasetInfo onAddDataset={() => setShowAddDataset(true)} />
-              )}
-              {dataset && !showAddDataset && leftTab === 'columns' && <ColumnManager />}
-            </div>
-          </div>
-        </aside>
+                <div className="sidebar-body">
+                  <DatasetSelector />
+                </div>
+              </div>
+            </aside>
 
-        {/* Plot Area - Fullscreen */}
-        <div className="plot-container">
-          <ScatterPlot />
-        </div>
-
-        {/* Right Sidebar - Settings */}
-        <aside className={`sidebar sidebar-right ${rightSidebarOpen ? 'open' : ''}`}>
-          <div className="sidebar-content">
-            <div className="sidebar-header">
-              <h2>Settings</h2>
-              <button className="icon-button-sm" onClick={toggleRightSidebar}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
+            {/* Plot Area */}
+            <div className={`plot-container ${leftSidebarOpen ? 'with-left-sidebar' : ''} ${rightSidebarOpen ? 'with-right-sidebar' : ''}`}>
+              <ScatterPlot />
             </div>
-            <div className="sidebar-body">
-              <SettingsPanel />
-            </div>
-          </div>
-        </aside>
 
-        {/* Sidebar backdrop for mobile */}
-        {(leftSidebarOpen || rightSidebarOpen) && (
-          <div
-            className="sidebar-backdrop"
-            onClick={() => {
-              setLeftSidebarOpen(false);
-              setRightSidebarOpen(false);
-            }}
-          />
+            {/* Right Sidebar - Settings */}
+            <aside className={`sidebar sidebar-right ${rightSidebarOpen ? 'open' : ''}`}>
+              <div className="sidebar-content">
+                <div className="sidebar-header">
+                  <h2>Settings</h2>
+                  <button className="icon-button-sm" onClick={toggleRightSidebar}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="sidebar-body">
+                  <SettingsPanel />
+                </div>
+              </div>
+            </aside>
+          </>
         )}
       </main>
 

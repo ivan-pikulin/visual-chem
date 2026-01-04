@@ -60,6 +60,9 @@ export interface ProcessedMolecule extends MoleculeData {
   originalIndex?: number; // Original row index in CSV
 }
 
+// Point shape options for scatter plot
+export type PointShape = 'circle' | 'square' | 'diamond' | 'triangle-up' | 'cross' | 'star';
+
 export interface Dataset {
   id: string;
   molecules: ProcessedMolecule[];
@@ -70,6 +73,13 @@ export interface Dataset {
   columnMapping?: ColumnMapping; // How columns were mapped
   groups?: string[]; // Unique group values if group column was mapped
   columnInfo?: ColumnInfo[]; // Detected column types and samples
+  // Plot settings per dataset
+  visible?: boolean; // Whether to show in plot (default true)
+  pointShape?: PointShape; // Point marker shape (default 'circle')
+  pointSize?: number; // Individual point size override (optional)
+  // Data processing settings
+  processLimit?: number; // Max rows to process (null = all)
+  totalRows?: number; // Total rows in original CSV
 }
 
 export type DimensionalityMethod = 'tsne' | 'umap' | 'pca';
@@ -178,6 +188,13 @@ export interface AppState {
   clearAllDatasets: () => void;
   setActiveDataset: (id: string | null) => void;
 
+  // Actions - Dataset display settings
+  setDatasetVisible: (id: string, visible: boolean) => void;
+  setDatasetPointShape: (id: string, shape: PointShape) => void;
+  setDatasetPointSize: (id: string, size: number | undefined) => void;
+  setDatasetColor: (id: string, color: string) => void;
+  setAllDatasetsVisible: (visible: boolean) => void;
+
   // Legacy support
   dataset: Dataset | null;
   setDataset: (dataset: Dataset | null) => void;
@@ -221,6 +238,9 @@ export interface AppState {
 
   // Actions - Coordinates
   updateCoordinates: (coordinates: Point2D[]) => void;
+  updateAllCoordinates: (coordinatesMap: Map<string, Point2D[]>) => void;
+  updateAllClusters: (clusters: number[]) => void;
+  updateAllOutliers: (outlierIndices: number[]) => void;
   updateMoleculeClusters: (clusters: number[]) => void;
   updateMoleculeOutliers: (outlierIndices: number[]) => void;
 

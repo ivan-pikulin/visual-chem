@@ -1,29 +1,14 @@
 import { useCallback, useState, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { reduceDimensionality } from '../lib/dimensionality';
-import { OperationCancelledError } from '../lib/fingerprints';
-import { computeKMeans, CLUSTER_COLORS } from '../lib/clustering';
-import { removeOutliers } from '../lib/outliers';
+import { CLUSTER_COLORS } from '../lib/clustering';
 import { exportInteractiveHTML, exportDataAsCSV, exportSelectedAsCSV } from '../lib/export';
-import type { DimensionalityMethod, PlotTool } from '../types';
+import type { PlotTool } from '../types';
 import { LabelTemplateInput } from './LabelTemplateInput';
 
 // Icons
 const ChevronDownIcon = () => (
   <svg className="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M6 9l6 6 6-6" />
-  </svg>
-);
-
-const MethodIcon = () => (
-  <svg className="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-  </svg>
-);
-
-const AnalysisIcon = () => (
-  <svg className="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
   </svg>
 );
 
@@ -100,40 +85,27 @@ const TOOL_CATEGORIES: { category: string; tools: { id: PlotTool; label: string;
   },
 ];
 
-type SectionId = 'method' | 'analysis' | 'visualization' | 'toolbar' | 'export';
+type SectionId = 'visualization' | 'toolbar' | 'export';
 
 export function SettingsPanel() {
   const {
     dataset,
-    drMethod,
-    tsneParams,
-    umapParams,
+    datasets,
     isLoading,
-    needsAnalysis,
     clustering,
     outlierSettings,
     visualization,
     clusterLabels,
     selectedIndices,
-    setDRMethod,
-    setTSNEParams,
-    setUMAPParams,
-    setProgress,
-    setLoading,
-    updateCoordinates,
-    setError,
-    setNeedsAnalysis,
-    setClusteringEnabled,
-    setNClusters,
-    updateMoleculeClusters,
-    setOutlierSettings,
-    updateMoleculeOutliers,
     setVisualization,
     toolbar,
     toggleTool,
-    startOperation,
     setActiveColumns,
   } = useAppStore();
+
+  // Check if multiple datasets are visible (for Dataset color mode)
+  const visibleDatasets = datasets.filter(d => d.visible !== false);
+  const hasMultipleVisibleDatasets = visibleDatasets.length > 1;
 
   // Get available value and label columns from dataset
   const valueColumns = dataset?.columnMapping?.values || [];
@@ -147,7 +119,7 @@ export function SettingsPanel() {
   }, [dataset?.csvHeaders]);
 
   const [openSections, setOpenSections] = useState<Set<SectionId>>(
-    new Set(['method', 'visualization'])
+    new Set(['visualization'])
   );
 
   const toggleSection = (id: SectionId) => {
@@ -161,81 +133,6 @@ export function SettingsPanel() {
       return next;
     });
   };
-
-  const handleRerun = useCallback(async () => {
-    if (!dataset) return;
-
-    const validMolecules = dataset.molecules.filter((m) => m.isValid);
-    if (validMolecules.length === 0) return;
-
-    const abortController = startOperation();
-    const signal = abortController.signal;
-    setProgress(0, `Running ${drMethod.toUpperCase()}...`);
-
-    try {
-      const fingerprintMatrix = validMolecules.map((m) => m.fingerprint);
-
-      const coordinates = await reduceDimensionality(
-        fingerprintMatrix,
-        drMethod,
-        { tsne: tsneParams, umap: umapParams },
-        (p) => {
-          const percent = (p.current / p.total) * 100;
-          setProgress(percent, `${p.stage.toUpperCase()}: ${p.current}/${p.total}`);
-        },
-        signal
-      );
-
-      updateCoordinates(coordinates);
-
-      // Check for cancellation before continuing
-      if (signal.aborted) throw new OperationCancelledError();
-
-      if (clustering.enabled && coordinates.length > 0) {
-        setProgress(95, 'Computing clusters...');
-        const clusterResult = computeKMeans(coordinates, clustering.nClusters);
-        updateMoleculeClusters(clusterResult.labels);
-      }
-
-      if (outlierSettings.enabled && coordinates.length > 0) {
-        setProgress(98, 'Detecting outliers...');
-        const outlierResult = removeOutliers(coordinates, outlierSettings.threshold);
-        updateMoleculeOutliers(outlierResult.removedIndices);
-      }
-
-      setProgress(100, 'Done!');
-      setNeedsAnalysis(false);
-      setLoading(false);
-    } catch (error) {
-      // Don't show error for cancelled operations
-      if (error instanceof OperationCancelledError) {
-        console.log('Analysis cancelled');
-        return;
-      }
-      console.error('Error in dimensionality reduction:', error);
-      setError(error instanceof Error ? error.message : 'Unknown error');
-      setLoading(false);
-    }
-  }, [
-    dataset, drMethod, tsneParams, umapParams, clustering, outlierSettings,
-    setLoading, setProgress, updateCoordinates, updateMoleculeClusters,
-    updateMoleculeOutliers, setError, setNeedsAnalysis, startOperation
-  ]);
-
-  const handleMethodChange = (method: DimensionalityMethod) => {
-    setDRMethod(method);
-  };
-
-  const handleRunClustering = useCallback(() => {
-    if (!dataset) return;
-
-    const validMolecules = dataset.molecules.filter((m) => m.isValid && m.coordinates);
-    if (validMolecules.length === 0) return;
-
-    const coordinates = validMolecules.map(m => m.coordinates!);
-    const clusterResult = computeKMeans(coordinates, clustering.nClusters);
-    updateMoleculeClusters(clusterResult.labels);
-  }, [dataset, clustering.nClusters, updateMoleculeClusters]);
 
   const handleExportHTML = useCallback(() => {
     if (!dataset) return;
@@ -324,251 +221,6 @@ export function SettingsPanel() {
 
   return (
     <div className="settings-panel">
-      {/* Analysis required banner */}
-      {needsAnalysis && dataset && (
-        <div className="analysis-banner">
-          <svg className="analysis-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 8v4M12 16h.01" />
-          </svg>
-          <div className="analysis-banner-text">
-            <strong>Data loaded!</strong> Configure parameters below and click <strong>Run Analysis</strong> to compute dimensionality reduction.
-          </div>
-        </div>
-      )}
-
-      {/* Dimensionality Reduction Method */}
-      <div className={`settings-section ${openSections.has('method') ? 'open' : ''}`}>
-        <div className="section-header" onClick={() => toggleSection('method')}>
-          <div className="section-header-left">
-            <MethodIcon />
-            <span className="section-title">Reduction Method</span>
-          </div>
-          <ChevronDownIcon />
-        </div>
-        <div className="section-content">
-          <div className="method-selector">
-            {(['pca', 'umap', 'tsne'] as const).map((method) => (
-              <button
-                key={method}
-                onClick={() => handleMethodChange(method)}
-                disabled={isLoading}
-                className={`method-btn ${drMethod === method ? 'active' : ''}`}
-              >
-                {method.toUpperCase()}
-              </button>
-            ))}
-          </div>
-
-          {drMethod === 'tsne' && (
-            <>
-              <div className="param-group">
-                <div className="param-label">
-                  <span className="param-name">Perplexity</span>
-                  <span className="param-value">{tsneParams.perplexity}</span>
-                </div>
-                <input
-                  type="range"
-                  min={5}
-                  max={50}
-                  value={tsneParams.perplexity}
-                  onChange={(e) => setTSNEParams({ perplexity: parseInt(e.target.value) })}
-                  disabled={isLoading}
-                />
-              </div>
-              <div className="param-group">
-                <div className="param-label">
-                  <span className="param-name">Iterations</span>
-                  <span className="param-value">{tsneParams.iterations}</span>
-                </div>
-                <input
-                  type="range"
-                  min={250}
-                  max={2000}
-                  step={250}
-                  value={tsneParams.iterations}
-                  onChange={(e) => setTSNEParams({ iterations: parseInt(e.target.value) })}
-                  disabled={isLoading}
-                />
-              </div>
-              <div className="param-group">
-                <div className="param-label">
-                  <span className="param-name">Learning Rate</span>
-                  <span className="param-value">{tsneParams.learningRate}</span>
-                </div>
-                <input
-                  type="range"
-                  min={10}
-                  max={1000}
-                  step={10}
-                  value={tsneParams.learningRate}
-                  onChange={(e) => setTSNEParams({ learningRate: parseInt(e.target.value) })}
-                  disabled={isLoading}
-                />
-              </div>
-            </>
-          )}
-
-          {drMethod === 'umap' && (
-            <>
-              <div className="param-group">
-                <div className="param-label">
-                  <span className="param-name">Neighbors</span>
-                  <span className="param-value">{umapParams.nNeighbors}</span>
-                </div>
-                <input
-                  type="range"
-                  min={2}
-                  max={100}
-                  value={umapParams.nNeighbors}
-                  onChange={(e) => setUMAPParams({ nNeighbors: parseInt(e.target.value) })}
-                  disabled={isLoading}
-                />
-              </div>
-              <div className="param-group">
-                <div className="param-label">
-                  <span className="param-name">Min Distance</span>
-                  <span className="param-value">{umapParams.minDist.toFixed(2)}</span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={0.99}
-                  step={0.01}
-                  value={umapParams.minDist}
-                  onChange={(e) => setUMAPParams({ minDist: parseFloat(e.target.value) })}
-                  disabled={isLoading}
-                />
-              </div>
-              <div className="param-group">
-                <div className="param-label">
-                  <span className="param-name">Epochs</span>
-                  <span className="param-value">{umapParams.nEpochs}</span>
-                </div>
-                <input
-                  type="range"
-                  min={100}
-                  max={1000}
-                  step={50}
-                  value={umapParams.nEpochs}
-                  onChange={(e) => setUMAPParams({ nEpochs: parseInt(e.target.value) })}
-                  disabled={isLoading}
-                />
-              </div>
-            </>
-          )}
-
-          {drMethod === 'pca' && (
-            <p className="param-hint">
-              PCA provides a fast, deterministic projection with no adjustable parameters.
-            </p>
-          )}
-
-          {dataset && (
-            <button
-              onClick={handleRerun}
-              disabled={isLoading}
-              className={`btn btn-primary ${needsAnalysis ? 'btn-accent' : ''}`}
-              style={{ marginTop: 16 }}
-            >
-              {isLoading ? 'Processing...' : needsAnalysis ? 'Run Analysis' : 'Rerun Analysis'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Analysis Section */}
-      <div className={`settings-section ${openSections.has('analysis') ? 'open' : ''}`}>
-        <div className="section-header" onClick={() => toggleSection('analysis')}>
-          <div className="section-header-left">
-            <AnalysisIcon />
-            <span className="section-title">Analysis</span>
-          </div>
-          <ChevronDownIcon />
-        </div>
-        <div className="section-content">
-          {/* Clustering */}
-          <div className="toggle-container">
-            <span className="toggle-label">Clustering</span>
-            <label className="toggle">
-              <input
-                type="checkbox"
-                checked={clustering.enabled}
-                onChange={(e) => setClusteringEnabled(e.target.checked)}
-                disabled={isLoading}
-              />
-              <span className="toggle-track" />
-              <span className="toggle-thumb" />
-            </label>
-          </div>
-
-          {clustering.enabled && (
-            <>
-              <div className="param-group" style={{ marginTop: 12 }}>
-                <div className="param-label">
-                  <span className="param-name">Number of Clusters</span>
-                  <span className="param-value">{clustering.nClusters}</span>
-                </div>
-                <input
-                  type="range"
-                  min={2}
-                  max={10}
-                  value={clustering.nClusters}
-                  onChange={(e) => setNClusters(parseInt(e.target.value))}
-                  disabled={isLoading}
-                />
-              </div>
-              {dataset && (
-                <button
-                  onClick={handleRunClustering}
-                  disabled={isLoading}
-                  className="btn btn-secondary"
-                  style={{ marginTop: 8 }}
-                >
-                  Run Clustering
-                </button>
-              )}
-            </>
-          )}
-
-          {/* Outlier Detection */}
-          <div className="toggle-container" style={{ marginTop: 20 }}>
-            <span className="toggle-label">Outlier Detection</span>
-            <label className="toggle">
-              <input
-                type="checkbox"
-                checked={outlierSettings.enabled}
-                onChange={(e) => setOutlierSettings({ enabled: e.target.checked })}
-                disabled={isLoading}
-              />
-              <span className="toggle-track" />
-              <span className="toggle-thumb" />
-            </label>
-          </div>
-
-          {outlierSettings.enabled && (
-            <div className="param-group" style={{ marginTop: 12 }}>
-              <div className="param-label">
-                <span className="param-name">Z-Score Threshold</span>
-                <span className="param-value">{outlierSettings.threshold.toFixed(1)}</span>
-              </div>
-              <input
-                type="range"
-                min={1.5}
-                max={5}
-                step={0.1}
-                value={outlierSettings.threshold}
-                onChange={(e) => setOutlierSettings({ threshold: parseFloat(e.target.value) })}
-                disabled={isLoading}
-              />
-              <p className="param-hint">
-                Points with Z-score &gt; {outlierSettings.threshold.toFixed(1)} will be marked as outliers
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Visualization Section */}
       <div className={`settings-section ${openSections.has('visualization') ? 'open' : ''}`}>
         <div className="section-header" onClick={() => toggleSection('visualization')}>
@@ -635,6 +287,14 @@ export function SettingsPanel() {
                 className={`color-mode-btn ${visualization.colorMode === 'cluster' ? 'active' : ''}`}
               >
                 Cluster
+              </button>
+              <button
+                onClick={() => setVisualization({ colorMode: 'dataset' })}
+                disabled={!hasMultipleVisibleDatasets}
+                className={`color-mode-btn ${visualization.colorMode === 'dataset' ? 'active' : ''}`}
+                title={!hasMultipleVisibleDatasets ? 'Load multiple datasets to use this mode' : 'Color by dataset'}
+              >
+                Dataset
               </button>
             </div>
           </div>

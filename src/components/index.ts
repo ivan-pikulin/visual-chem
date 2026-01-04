@@ -1,7 +1,10 @@
 export { ScatterPlot } from './ScatterPlot';
 export { FileUpload } from './FileUpload';
 export { SettingsPanel } from './SettingsPanel';
+export { AnalysisPanel } from './AnalysisPanel';
 export { ProgressBar } from './ProgressBar';
 export { DatasetInfo } from './DatasetInfo';
 export { ErrorMessage } from './ErrorMessage';
 export { ColumnManager } from './ColumnManager';
+export { DataView } from './DataView';
+export { DatasetSelector } from './DatasetSelector';

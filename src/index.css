@@ -128,6 +128,26 @@ body {
   cursor: not-allowed;
 }
 
+.header-btn.dirty {
+  position: relative;
+}
+
+.dirty-indicator {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  background: var(--color-warning);
+  border-radius: 50%;
+  animation: pulse-dirty 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dirty {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .logo {
   display: flex;
   align-items: center;

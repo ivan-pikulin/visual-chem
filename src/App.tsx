@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAppStore } from './store/useAppStore';
 import {
   ScatterPlot,
@@ -9,7 +9,14 @@ import {
   PlotToolbar,
   PlotSidebar,
 } from './components';
-import { saveProject, loadProject, isVChemFile } from './lib/project';
+import { isVChemFile, loadProject } from './lib/project';
+import {
+  initProjectManager,
+  destroyProjectManager,
+  subscribeToProjectState,
+  saveProject as saveProjectManaged,
+  openProject,
+} from './lib/projectManager';
 import './index.css';
 
 type MainTab = 'data' | 'analysis' | 'plot';
@@ -18,24 +25,57 @@ function App() {
   const { datasets, needsAnalysis, setError, loadProjectState } = useAppStore();
   const [mainTab, setMainTab] = useState<MainTab>('data');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [projectIsDirty, setProjectIsDirty] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Handle save project
+  // Initialize project manager
+  useEffect(() => {
+    initProjectManager();
+
+    const unsubscribe = subscribeToProjectState((state) => {
+      setProjectIsDirty(state.isDirty);
+    });
+
+    return () => {
+      unsubscribe();
+      destroyProjectManager();
+    };
+  }, []);
+
+  // Handle save project (Tauri native dialog)
   const handleSaveProject = useCallback(async () => {
     try {
-      const state = useAppStore.getState();
-      await saveProject(state);
+      await saveProjectManaged();
     } catch (error) {
       setError(`Failed to save project: ${error}`);
     }
   }, [setError]);
 
-  // Handle open project
-  const handleOpenProject = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
+  // Handle open project (Tauri native dialog)
+  const handleOpenProjectNative = useCallback(async () => {
+    try {
+      const opened = await openProject();
+      if (opened) {
+        // Switch to plot tab if we have coordinates
+        const state = useAppStore.getState();
+        if (state.datasets.some(d => d.molecules.some(m => m.coordinates))) {
+          setMainTab('plot');
+        }
+      }
+    } catch (error) {
+      setError(`Failed to open project: ${error}`);
+    }
+  }, [setError]);
 
-  // Handle file selection for project open
+  // Fallback: Handle open project via file input (for web or fallback)
+  const handleOpenProject = useCallback(() => {
+    // Try native dialog first, fallback to file input
+    handleOpenProjectNative().catch(() => {
+      fileInputRef.current?.click();
+    });
+  }, [handleOpenProjectNative]);
+
+  // Handle file selection for project open (fallback for web)
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -86,16 +126,17 @@ function App() {
             </svg>
           </button>
           <button
-            className="header-btn"
+            className={`header-btn ${projectIsDirty ? 'dirty' : ''}`}
             onClick={handleSaveProject}
             disabled={datasets.length === 0}
-            title="Save Project (.vchem)"
+            title="Save Project (Cmd+S)"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
               <polyline points="17 21 17 13 7 13 7 21" />
               <polyline points="7 3 7 8 15 8" />
             </svg>
+            {projectIsDirty && <span className="dirty-indicator" />}
           </button>
         </div>
 
@@ -157,6 +198,7 @@ function App() {
                   }
                   setMainTab('data');
                 }}
+                onGoToPlot={() => setMainTab('plot')}
               />
             </div>
           </div>

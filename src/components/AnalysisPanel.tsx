@@ -79,9 +79,10 @@ const PlayIcon = () => (
 
 interface AnalysisPanelProps {
   onGoToData?: (datasetId?: string) => void;
+  onGoToPlot?: () => void;
 }
 
-export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
+export function AnalysisPanel({ onGoToData, onGoToPlot }: AnalysisPanelProps) {
   const {
     datasets,
     drMethod,
@@ -231,6 +232,11 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
       setProgress(100, 'Done!');
       setNeedsAnalysis(false);
       setLoading(false);
+
+      // Navigate to plot view after successful analysis
+      if (onGoToPlot) {
+        onGoToPlot();
+      }
     } catch (error) {
       if (error instanceof OperationCancelledError) {
         console.log('Analysis cancelled');

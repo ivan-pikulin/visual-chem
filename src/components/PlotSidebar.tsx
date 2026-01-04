@@ -101,6 +101,7 @@ export function PlotSidebar({ onClose }: PlotSidebarProps) {
     setDatasetVisible,
     setAllDatasetsVisible,
     setSelectedIndices,
+    setDatasetDisplaySettings,
   } = useAppStore();
 
   const [activeTab, setActiveTab] = useState<SidebarTab>(() =>
@@ -148,11 +149,10 @@ export function PlotSidebar({ onClose }: PlotSidebarProps) {
   // Settings tab state
   const visibleDatasets = datasets.filter(d => d.visible !== false);
   const hasMultipleVisibleDatasets = visibleDatasets.length > 1;
-  const valueColumns = dataset?.columnMapping?.values || [];
   const labelColumns = dataset?.columnMapping?.labels || [];
-  const activeValueColumn = visualization.activeColumns.value;
   const labelTemplate = visualization.activeColumns.labelTemplate || '';
   const allColumns = useMemo(() => dataset?.csvHeaders || [], [dataset?.csvHeaders]);
+  const columnInfo = useMemo(() => dataset?.columnInfo || [], [dataset?.columnInfo]);
 
   const [openSections, setOpenSections] = useState<Set<SectionId>>(new Set(['visualization']));
 
@@ -413,7 +413,7 @@ export function PlotSidebar({ onClose }: PlotSidebarProps) {
                   <div className="color-mode-selector">
                     <button
                       onClick={() => setVisualization({ colorMode: 'value' })}
-                      disabled={valueColumns.length === 0}
+                      disabled={!dataset?.displaySettings?.valueExpression && (dataset?.columnMapping?.values?.length ?? 0) === 0}
                       className={`color-mode-btn ${visualization.colorMode === 'value' ? 'active' : ''}`}
                     >
                       Value
@@ -442,22 +442,20 @@ export function PlotSidebar({ onClose }: PlotSidebarProps) {
                   </div>
                 </div>
 
-                {valueColumns.length > 1 && (
+                {allColumns.length > 0 && (
                   <div className="param-group">
                     <div className="param-label">
-                      <span className="param-name">Value Column</span>
+                      <span className="param-name">Value</span>
+                      <span className="param-hint">Numeric only. Supports: @col, +, -, *, /, abs(), log()</span>
                     </div>
-                    <select
-                      className="param-select"
-                      value={activeValueColumn || ''}
-                      onChange={(e) => setActiveColumns({ value: e.target.value || undefined })}
-                    >
-                      {valueColumns.map((col) => (
-                        <option key={col} value={col}>
-                          {col}
-                        </option>
-                      ))}
-                    </select>
+                    <LabelTemplateInput
+                      value={dataset?.displaySettings?.valueExpression || ''}
+                      onChange={(value) => dataset && setDatasetDisplaySettings(dataset.id, { valueExpression: value })}
+                      columns={allColumns}
+                      columnInfo={columnInfo}
+                      columnTypeFilter="number"
+                      placeholder="e.g., @pKi or abs(@a - @b)"
+                    />
                   </div>
                 )}
 

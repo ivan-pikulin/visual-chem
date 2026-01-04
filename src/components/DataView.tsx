@@ -1,6 +1,7 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useAppStore, DATASET_COLORS } from '../store/useAppStore';
 import { FileUpload } from './FileUpload';
+import { LabelTemplateInput } from './LabelTemplateInput';
 import type { ColumnInfo } from '../types';
 
 // Column role definitions
@@ -15,6 +16,55 @@ type RoleId = (typeof COLUMN_ROLES)[number]['id'];
 
 const ROWS_PER_PAGE = 5;
 
+// Confirmation popover for replacing expressions
+interface ConfirmPopoverProps {
+  anchorRect: DOMRect;
+  currentExpression: string;
+  newExpression: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ConfirmPopover({ anchorRect, currentExpression, newExpression, onConfirm, onCancel }: ConfirmPopoverProps) {
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        onCancel();
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [onCancel]);
+
+  return (
+    <div
+      ref={popoverRef}
+      className="dv-confirm-popover"
+      style={{
+        top: anchorRect.bottom + 8,
+        left: anchorRect.left,
+      }}
+    >
+      <div className="dv-confirm-message">
+        Replace <code>{currentExpression}</code> with <code>{newExpression}</code>?
+      </div>
+      <div className="dv-confirm-actions">
+        <button className="dv-confirm-btn cancel" onClick={onCancel}>Cancel</button>
+        <button className="dv-confirm-btn confirm" onClick={onConfirm}>Replace</button>
+      </div>
+    </div>
+  );
+}
+
 interface DataViewProps {
   onGoToAnalysis?: () => void;
 }
@@ -27,10 +77,6 @@ export function DataView({ onGoToAnalysis }: DataViewProps) {
     removeDataset,
     clearAllDatasets,
     setDatasetColor,
-    addValueColumn,
-    removeValueColumn,
-    addLabelColumn,
-    removeLabelColumn,
     setGroupColumn,
     setSmilesColumn,
     setDatasetDisplaySettings,
@@ -38,6 +84,15 @@ export function DataView({ onGoToAnalysis }: DataViewProps) {
 
   const [currentPage, setCurrentPage] = useState(0);
   const addFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Confirmation popover state
+  const [confirmPopover, setConfirmPopover] = useState<{
+    anchorRect: DOMRect;
+    columnName: string;
+    roleId: RoleId;
+    currentExpression: string;
+    newExpression: string;
+  } | null>(null);
 
   // Handler for "Add" button - directly opens file picker
   const handleAddDatasetClick = useCallback(() => {
@@ -75,11 +130,50 @@ export function DataView({ onGoToAnalysis }: DataViewProps) {
     return result;
   }, [activeDataset?.columnMapping]);
 
-  const hasRole = (columnName: string, roleId: RoleId): boolean => {
-    return columnToRoles[columnName]?.includes(roleId) || false;
-  };
+  // Check if expression is exactly @columnName (for reverse sync)
+  const isExactColumnRef = useCallback((expression: string, columnName: string): boolean => {
+    return expression.trim() === `@${columnName}`;
+  }, []);
 
-  const handleRoleToggle = useCallback((columnName: string, roleId: RoleId) => {
+  // Get current expression for a role
+  const getExpressionForRole = useCallback((roleId: RoleId): string => {
+    if (!activeDataset?.displaySettings) return '';
+    if (roleId === 'value') return activeDataset.displaySettings.valueExpression || '';
+    if (roleId === 'label') return activeDataset.displaySettings.labelTemplate || '';
+    return '';
+  }, [activeDataset?.displaySettings]);
+
+  // Check if column should show as active based on expression match
+  const hasRoleFromExpression = useCallback((columnName: string, roleId: RoleId): boolean => {
+    if (roleId !== 'value' && roleId !== 'label') return false;
+    const expression = getExpressionForRole(roleId);
+    return isExactColumnRef(expression, columnName);
+  }, [getExpressionForRole, isExactColumnRef]);
+
+  const hasRole = useCallback((columnName: string, roleId: RoleId): boolean => {
+    // For value and label, ONLY use expression-based detection (displaySettings)
+    // This ensures proper sync between column toggles and expression inputs
+    if (roleId === 'value' || roleId === 'label') {
+      return hasRoleFromExpression(columnName, roleId);
+    }
+    // For smiles and group, use traditional column mapping
+    return columnToRoles[columnName]?.includes(roleId) || false;
+  }, [columnToRoles, hasRoleFromExpression]);
+
+  // Apply expression change for a role
+  const applyExpressionChange = useCallback((columnName: string, roleId: RoleId) => {
+    if (!activeDataset) return;
+    const newExpression = `@${columnName}`;
+
+    if (roleId === 'value') {
+      setDatasetDisplaySettings(activeDataset.id, { valueExpression: newExpression });
+    } else if (roleId === 'label') {
+      setDatasetDisplaySettings(activeDataset.id, { labelTemplate: newExpression });
+    }
+  }, [activeDataset, setDatasetDisplaySettings]);
+
+  // Handle role toggle with expression sync
+  const handleRoleToggle = useCallback((columnName: string, roleId: RoleId, event?: React.MouseEvent) => {
     if (!activeDataset) return;
 
     const currentlyHasRole = hasRole(columnName, roleId);
@@ -90,17 +184,35 @@ export function DataView({ onGoToAnalysis }: DataViewProps) {
         setSmilesColumn(columnName);
       }
       // Can't unset SMILES by clicking again (must select another column)
-    } else if (roleId === 'value') {
+    } else if (roleId === 'value' || roleId === 'label') {
+      const currentExpression = getExpressionForRole(roleId);
+      const newExpression = `@${columnName}`;
+
       if (currentlyHasRole) {
-        removeValueColumn(columnName);
+        // If already active, clicking clears the expression
+        if (roleId === 'value') {
+          setDatasetDisplaySettings(activeDataset.id, { valueExpression: '' });
+        } else {
+          setDatasetDisplaySettings(activeDataset.id, { labelTemplate: '' });
+        }
       } else {
-        addValueColumn(columnName);
-      }
-    } else if (roleId === 'label') {
-      if (currentlyHasRole) {
-        removeLabelColumn(columnName);
-      } else {
-        addLabelColumn(columnName);
+        // Want to set this column
+        if (currentExpression && !isExactColumnRef(currentExpression, columnName)) {
+          // Expression exists and is different - show confirmation
+          if (event) {
+            const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+            setConfirmPopover({
+              anchorRect: rect,
+              columnName,
+              roleId,
+              currentExpression,
+              newExpression,
+            });
+          }
+        } else {
+          // Expression is empty or already this column - just set it
+          applyExpressionChange(columnName, roleId);
+        }
       }
     } else if (roleId === 'group') {
       if (currentlyHasRole) {
@@ -109,7 +221,18 @@ export function DataView({ onGoToAnalysis }: DataViewProps) {
         setGroupColumn(columnName);
       }
     }
-  }, [activeDataset, hasRole, setSmilesColumn, addValueColumn, removeValueColumn, addLabelColumn, removeLabelColumn, setGroupColumn]);
+  }, [activeDataset, hasRole, getExpressionForRole, isExactColumnRef, applyExpressionChange, setSmilesColumn, setDatasetDisplaySettings, setGroupColumn]);
+
+  // Confirm popover handlers
+  const handleConfirmReplace = useCallback(() => {
+    if (!confirmPopover) return;
+    applyExpressionChange(confirmPopover.columnName, confirmPopover.roleId);
+    setConfirmPopover(null);
+  }, [confirmPopover, applyExpressionChange]);
+
+  const handleCancelReplace = useCallback(() => {
+    setConfirmPopover(null);
+  }, []);
 
   // Get column info helper
   const getColumnInfo = useCallback((columnName: string): ColumnInfo | undefined => {
@@ -366,13 +489,20 @@ export function DataView({ onGoToAnalysis }: DataViewProps) {
                               </div>
                               <div className="dv-role-toggles">
                                 {COLUMN_ROLES.map((role) => {
+                                  // Filter roles by column type:
+                                  // - SMILES: only for text columns
+                                  // - Value: only for numeric columns
+                                  const isNumeric = info?.type === 'number';
+                                  if (role.id === 'smiles' && isNumeric) return null;
+                                  if (role.id === 'value' && !isNumeric) return null;
+
                                   const isActive = hasRole(header, role.id);
                                   return (
                                     <button
                                       key={role.id}
                                       className={`dv-role-toggle ${isActive ? 'active' : ''}`}
                                       style={{ '--role-color': role.color } as React.CSSProperties}
-                                      onClick={() => handleRoleToggle(header, role.id)}
+                                      onClick={(e) => handleRoleToggle(header, role.id, e)}
                                       title={`${isActive ? 'Remove' : 'Assign'} ${role.label} role`}
                                     >
                                       {role.icon}
@@ -465,41 +595,25 @@ export function DataView({ onGoToAnalysis }: DataViewProps) {
               <div className="dv-display-row">
                 <label className="dv-display-label">Label</label>
                 <div className="dv-display-input-wrapper">
-                  <input
-                    type="text"
-                    className="dv-display-input"
-                    placeholder="e.g., @name: @pKi"
+                  <LabelTemplateInput
                     value={activeDataset.displaySettings?.labelTemplate || ''}
-                    onChange={(e) => handleLabelTemplateChange(e.target.value)}
+                    onChange={handleLabelTemplateChange}
+                    columns={columns}
+                    placeholder="e.g., @name: @pKi"
                   />
-                  <div className="dv-quick-columns">
-                    {columns.slice(0, 4).map((col) => (
-                      <button
-                        key={col}
-                        type="button"
-                        className="dv-quick-btn"
-                        onClick={() => {
-                          const current = activeDataset.displaySettings?.labelTemplate || '';
-                          const newValue = current ? `${current} @${col}` : `@${col}`;
-                          handleLabelTemplateChange(newValue);
-                        }}
-                      >
-                        {col}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
 
               <div className="dv-display-row">
                 <label className="dv-display-label">Value</label>
                 <div className="dv-display-input-wrapper">
-                  <input
-                    type="text"
-                    className="dv-display-input"
-                    placeholder="e.g., @pKi or abs(@a - @b)"
+                  <LabelTemplateInput
                     value={activeDataset.displaySettings?.valueExpression || ''}
-                    onChange={(e) => handleValueExpressionChange(e.target.value)}
+                    onChange={handleValueExpressionChange}
+                    columns={columns}
+                    columnInfo={activeDataset.columnInfo}
+                    columnTypeFilter="number"
+                    placeholder="e.g., @pKi or abs(@a - @b)"
                   />
                   <span className="dv-display-hint">
                     Supports: @column, +, -, *, /, abs(), log()
@@ -540,6 +654,17 @@ export function DataView({ onGoToAnalysis }: DataViewProps) {
           </section>
         )}
       </div>
+
+      {/* Confirmation popover for replacing expressions */}
+      {confirmPopover && (
+        <ConfirmPopover
+          anchorRect={confirmPopover.anchorRect}
+          currentExpression={confirmPopover.currentExpression}
+          newExpression={confirmPopover.newExpression}
+          onConfirm={handleConfirmReplace}
+          onCancel={handleCancelReplace}
+        />
+      )}
     </div>
   );
 }

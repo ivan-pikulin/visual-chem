@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import { useCallback, useEffect, useState, forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { useEditor, EditorContent, ReactRenderer } from '@tiptap/react';
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
@@ -6,11 +6,16 @@ import Text from '@tiptap/extension-text';
 import Mention from '@tiptap/extension-mention';
 import Placeholder from '@tiptap/extension-placeholder';
 import { SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
+import type { ColumnInfo } from '../types';
 
 interface LabelTemplateInputProps {
   value: string;
   onChange: (value: string) => void;
   columns: string[];
+  /** Column info for type filtering - if provided, will be used for filtering */
+  columnInfo?: ColumnInfo[];
+  /** Filter columns by type - only works if columnInfo is provided */
+  columnTypeFilter?: 'number' | 'string' | 'all';
   placeholder?: string;
 }
 
@@ -135,9 +140,28 @@ export function LabelTemplateInput({
   value,
   onChange,
   columns,
+  columnInfo,
+  columnTypeFilter = 'all',
   placeholder = 'Type @ to insert column values...',
 }: LabelTemplateInputProps) {
   const [isFocused, setIsFocused] = useState(false);
+
+  // Filter columns by type if columnInfo is provided
+  const filteredColumns = useMemo(() => {
+    if (!columnInfo || columnTypeFilter === 'all') {
+      return columns;
+    }
+    const allowedColumns = new Set(
+      columnInfo
+        .filter((col) => col.type === columnTypeFilter)
+        .map((col) => col.name)
+    );
+    return columns.filter((col) => allowedColumns.has(col));
+  }, [columns, columnInfo, columnTypeFilter]);
+
+  // Use ref to always have access to current filtered columns in suggestion callback
+  const filteredColumnsRef = useRef(filteredColumns);
+  filteredColumnsRef.current = filteredColumns;
 
   const editor = useEditor({
     extensions: [
@@ -160,7 +184,7 @@ export function LabelTemplateInput({
         },
         suggestion: {
           items: ({ query }: { query: string }) => {
-            return columns
+            return filteredColumnsRef.current
               .filter((col) => col.toLowerCase().includes(query.toLowerCase()))
               .slice(0, 8);
           },

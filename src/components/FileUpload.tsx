@@ -303,6 +303,12 @@ export function FileUpload({ addToExisting = false, onComplete, compact = false,
           groups = Array.from(uniqueGroups).sort();
         }
 
+        // Build display settings from auto-detected columns
+        const displaySettings = {
+          valueExpression: mapping.values[0] ? `@${mapping.values[0]}` : '',
+          labelTemplate: mapping.labels[0] ? `@${mapping.labels[0]}` : '',
+        };
+
         // Update the placeholder dataset with full data
         updateDataset(datasetId, {
           molecules: finalMolecules,
@@ -312,6 +318,7 @@ export function FileUpload({ addToExisting = false, onComplete, compact = false,
           groups,
           columnInfo,
           totalRows: data.length,
+          displaySettings,
         });
 
         // Set active columns if this is the first dataset

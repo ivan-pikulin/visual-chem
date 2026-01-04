@@ -205,13 +205,6 @@ body {
   overflow: hidden;
 }
 
-/* Plot container - fullscreen */
-.plot-container {
-  position: absolute;
-  inset: 0;
-  background: var(--color-surface);
-}
-
 /* ========================================
    SIDEBARS
    ======================================== */
@@ -1095,12 +1088,31 @@ input[type="range"]:disabled {
   padding: 12px;
   box-shadow: var(--shadow-md);
   font-size: 12px;
+  user-select: none;
+  z-index: 10;
+}
+
+.cluster-legend.dragging {
+  box-shadow: var(--shadow-lg);
+  opacity: 0.95;
 }
 
 .cluster-legend-title {
   font-weight: 600;
   color: var(--color-text-primary);
   margin-bottom: 8px;
+  cursor: grab;
+  padding: 2px 4px;
+  margin: -2px -4px 8px -4px;
+  border-radius: 4px;
+}
+
+.cluster-legend-title:hover {
+  background: var(--color-border-light);
+}
+
+.cluster-legend.dragging .cluster-legend-title {
+  cursor: grabbing;
 }
 
 .cluster-legend-item {
@@ -3658,23 +3670,16 @@ td.cmapper-row-num {
    ======================================== */
 
 .plot-view {
-  position: relative;
+  display: flex;
   width: 100%;
   height: 100%;
   overflow: hidden;
 }
 
 .plot-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  transition: right var(--transition-normal);
-}
-
-.plot-container.with-sidebar {
-  right: var(--sidebar-width);
+  flex: 1;
+  min-width: 0;
+  position: relative;
 }
 
 /* ========================================
@@ -3694,6 +3699,34 @@ td.cmapper-row-num {
   box-shadow: var(--shadow-md);
   z-index: 100;
   backdrop-filter: blur(8px);
+  user-select: none;
+}
+
+.plot-toolbar.dragging {
+  box-shadow: var(--shadow-lg);
+  opacity: 0.95;
+}
+
+.plot-toolbar-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  color: var(--color-text-tertiary);
+  cursor: grab;
+  border-radius: 4px;
+  margin-right: 2px;
+}
+
+.plot-toolbar-drag-handle:hover {
+  color: var(--color-text-secondary);
+  background: var(--color-border-light);
+}
+
+.plot-toolbar.dragging .plot-toolbar-drag-handle {
+  cursor: grabbing;
+  color: var(--color-accent);
 }
 
 .plot-toolbar-group {
@@ -3830,26 +3863,23 @@ td.cmapper-row-num {
    ======================================== */
 
 .plot-sidebar-wrapper {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: var(--sidebar-width);
-  transform: translateX(100%);
-  transition: transform var(--transition-normal);
-  z-index: 50;
+  width: 0;
+  overflow: hidden;
+  transition: width var(--transition-normal);
+  flex-shrink: 0;
 }
 
 .plot-sidebar-wrapper.open {
-  transform: translateX(0);
+  width: var(--sidebar-width);
 }
 
 .plot-sidebar {
+  width: var(--sidebar-width);
   height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--color-surface);
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.08);
+  border-left: 1px solid var(--color-border-light);
 }
 
 .plot-sidebar-tabs {
@@ -4650,6 +4680,72 @@ td.cmapper-row-num {
   color: white;
 }
 
+/* Confirmation Popover */
+.dv-confirm-popover {
+  position: fixed;
+  z-index: 1000;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.dv-confirm-message {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.dv-confirm-message code {
+  background: var(--color-border-light);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--color-text-primary);
+}
+
+.dv-confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.dv-confirm-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.dv-confirm-btn.cancel {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.dv-confirm-btn.cancel:hover {
+  background: var(--color-border-light);
+  color: var(--color-text-primary);
+}
+
+.dv-confirm-btn.confirm {
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  color: white;
+}
+
+.dv-confirm-btn.confirm:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
 /* Table Body */
 .dv-td {
   padding: 8px 12px;
@@ -4995,5 +5091,235 @@ td.cmapper-row-num {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
   color: var(--color-text-tertiary);
+}
+
+/* ========================================
+   NEW ANALYSIS PANEL LAYOUT
+   ======================================== */
+
+.analysis-panel-new {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.analysis-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Section header with badge on right */
+.section-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 10px;
+  background: var(--color-border-light);
+  border-radius: 12px;
+  color: var(--color-text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.section-badge-accent {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+/* Method selector with descriptions */
+.method-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.method-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-light);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.method-btn:hover:not(:disabled) {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+
+.method-btn.active {
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent);
+}
+
+.method-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.method-btn-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.method-btn.active .method-btn-name {
+  color: var(--color-accent);
+}
+
+.method-btn-desc {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+/* PCA info box */
+.pca-info-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.pca-info-box .info-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+/* Post-processing blocks */
+.postprocess-block {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.postprocess-block:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.postprocess-block:first-child {
+  padding-top: 0;
+}
+
+.postprocess-block .param-group {
+  margin-top: 12px;
+}
+
+.postprocess-block .btn {
+  margin-top: 12px;
+}
+
+/* Data summary list */
+.data-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.data-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.data-summary-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.data-summary-name {
+  flex: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.data-summary-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.empty-state-text {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  margin: 0;
+  text-align: center;
+  padding: 12px 0;
+}
+
+/* Run Analysis Footer */
+.analysis-footer {
+  margin-top: 24px;
+}
+
+.analysis-footer-content {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: 14px;
+  padding: 20px 24px;
+  text-align: center;
+}
+
+.analysis-footer-hint {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 0 0 12px;
+}
+
+.analysis-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.analysis-run-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px !important;
+  font-size: 15px !important;
+  min-width: 180px;
+}
+
+.analysis-run-btn .play-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.analysis-run-btn.btn-accent {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.analysis-run-btn.btn-accent:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+.analysis-run-btn.pulse {
+  animation: btn-pulse 2s infinite;
 }
 

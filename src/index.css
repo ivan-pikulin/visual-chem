@@ -1362,13 +1362,25 @@ input[type="range"]:disabled {
    ======================================== */
 
 .js-plotly-plot .plotly .modebar {
+  position: absolute !important;
   background: rgba(255, 255, 255, 0.9) !important;
   border-radius: 6px;
   padding: 4px !important;
-  top: 8px !important;
+  top: auto !important;
+  bottom: 60px !important;
   right: 8px !important;
   left: auto !important;
   flex-direction: row !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+.js-plotly-plot .plotly .modebar-container {
+  position: absolute !important;
+  top: auto !important;
+  bottom: 0 !important;
+  right: 0 !important;
 }
 
 .js-plotly-plot .plotly .modebar-group {
@@ -3689,7 +3701,8 @@ td.cmapper-row-num {
 .plot-toolbar {
   position: absolute;
   top: 12px;
-  right: 12px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 4px;

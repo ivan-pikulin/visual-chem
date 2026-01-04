@@ -63,6 +63,14 @@ const InfoIcon = () => (
   </svg>
 );
 
+// Tooltip component for parameter hints
+const ParamTooltip = ({ text }: { text: string }) => (
+  <span className="param-tooltip-wrapper">
+    <span className="param-tooltip-icon">i</span>
+    <span className="param-tooltip-text">{text}</span>
+  </span>
+);
+
 const PlayIcon = () => (
   <svg className="play-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" />
@@ -367,7 +375,10 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
                   <>
                     <div className="param-group">
                       <div className="param-label">
-                        <span className="param-name">Perplexity</span>
+                        <span className="param-name">
+                          Perplexity
+                          <ParamTooltip text="Balance between local and global structure. Lower values focus on local clusters, higher values preserve global relationships." />
+                        </span>
                         <span className={`param-value ${perplexityStatus?.inRange ? '' : 'param-value-warning'}`}>
                           {tsneParams.perplexity}
                         </span>
@@ -386,7 +397,10 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
                     </div>
                     <div className="param-group">
                       <div className="param-label">
-                        <span className="param-name">Iterations</span>
+                        <span className="param-name">
+                          Iterations
+                          <ParamTooltip text="Number of optimization steps. More iterations improve quality but take longer." />
+                        </span>
                         <span className="param-value">{tsneParams.iterations}</span>
                       </div>
                       <input
@@ -404,7 +418,10 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
                     </div>
                     <div className="param-group">
                       <div className="param-label">
-                        <span className="param-name">Learning Rate</span>
+                        <span className="param-name">
+                          Learning Rate
+                          <ParamTooltip text="Step size for optimization. Too high may cause instability, too low slows convergence." />
+                        </span>
                         <span className="param-value">{tsneParams.learningRate}</span>
                       </div>
                       <input
@@ -426,7 +443,10 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
                   <>
                     <div className="param-group">
                       <div className="param-label">
-                        <span className="param-name">Neighbors</span>
+                        <span className="param-name">
+                          Neighbors
+                          <ParamTooltip text="Number of neighbors to consider. Lower values capture fine detail, higher values preserve broader topology." />
+                        </span>
                         <span className={`param-value ${neighborsStatus?.inRange ? '' : 'param-value-warning'}`}>
                           {umapParams.nNeighbors}
                         </span>
@@ -445,7 +465,10 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
                     </div>
                     <div className="param-group">
                       <div className="param-label">
-                        <span className="param-name">Min Distance</span>
+                        <span className="param-name">
+                          Min Distance
+                          <ParamTooltip text="Minimum distance between points. Lower values create tighter clusters, higher values spread points more evenly." />
+                        </span>
                         <span className="param-value">{umapParams.minDist.toFixed(2)}</span>
                       </div>
                       <input
@@ -463,7 +486,10 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
                     </div>
                     <div className="param-group">
                       <div className="param-label">
-                        <span className="param-name">Epochs</span>
+                        <span className="param-name">
+                          Epochs
+                          <ParamTooltip text="Training iterations. More epochs improve embedding quality but increase computation time." />
+                        </span>
                         <span className="param-value">{umapParams.nEpochs}</span>
                       </div>
                       <input
@@ -506,10 +532,16 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
                   <span className="toggle-track" />
                   <span className="toggle-thumb" />
                 </label>
-                <span className="postprocess-label">K-Means Clustering</span>
+                <span className="postprocess-label">
+                  K-Means Clustering
+                  <ParamTooltip text="Group molecules into K clusters based on their positions in the reduced space." />
+                </span>
               </div>
               <div className="postprocess-control">
-                <span className="postprocess-input-label">K =</span>
+                <span className="postprocess-input-label">
+                  K
+                  <ParamTooltip text="Number of clusters to create. Choose based on expected groupings in your data." />
+                </span>
                 <input
                   type="number"
                   className="postprocess-input"
@@ -544,10 +576,16 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
                   <span className="toggle-track" />
                   <span className="toggle-thumb" />
                 </label>
-                <span className="postprocess-label">Remove Outliers</span>
+                <span className="postprocess-label">
+                  Remove Outliers
+                  <ParamTooltip text="Hide molecules that are statistically distant from the main distribution." />
+                </span>
               </div>
               <div className="postprocess-control">
-                <span className="postprocess-input-label">σ =</span>
+                <span className="postprocess-input-label">
+                  σ
+                  <ParamTooltip text="Standard deviations threshold. Lower values remove more points, higher values keep more." />
+                </span>
                 <input
                   type="number"
                   className="postprocess-input"

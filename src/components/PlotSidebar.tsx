@@ -105,9 +105,11 @@ export function PlotSidebar({ className, onClose }: PlotSidebarProps) {
     setDatasetDisplaySettings,
   } = useAppStore();
 
-  const [activeTab, setActiveTab] = useState<SidebarTab>(() =>
-    selectedIndices.length > 0 ? 'selection' : 'datasets'
-  );
+  const [activeTab, setActiveTab] = useState<SidebarTab>(() => {
+    if (selectedIndices.length > 0) return 'selection';
+    if (datasets.length > 1) return 'datasets';
+    return 'settings';
+  });
 
   // Auto-switch to selection tab when selection changes
   const prevSelectedCount = useRef(selectedIndices.length);

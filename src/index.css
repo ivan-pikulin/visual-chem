@@ -634,6 +634,79 @@ body {
 .param-name {
   font-size: 12px;
   color: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Parameter tooltip */
+.param-tooltip-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+}
+
+.param-tooltip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 9px;
+  font-weight: 600;
+  font-style: italic;
+  font-family: Georgia, 'Times New Roman', serif;
+  color: var(--color-text-tertiary);
+  background: var(--color-border);
+  border-radius: 50%;
+  cursor: help;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.param-tooltip-wrapper:hover .param-tooltip-icon {
+  color: var(--color-text-primary);
+  background: var(--color-bg-dark);
+}
+
+.param-tooltip-text {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1.4;
+  color: var(--color-text-inverse);
+  background: var(--color-bg-dark);
+  border-radius: 6px;
+  white-space: normal;
+  width: max-content;
+  max-width: 220px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition-fast), visibility var(--transition-fast);
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.param-tooltip-text::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--color-bg-dark);
+}
+
+.param-tooltip-wrapper:hover .param-tooltip-text {
+  opacity: 1;
+  visibility: visible;
 }
 
 .param-value {
@@ -5279,6 +5352,9 @@ td.cmapper-row-num {
 .postprocess-label {
   font-size: 14px;
   color: var(--color-text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .postprocess-control {
@@ -5291,6 +5367,9 @@ td.cmapper-row-num {
 .postprocess-input-label {
   font-size: 12px;
   color: var(--color-text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .postprocess-input {

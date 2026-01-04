@@ -3862,17 +3862,6 @@ td.cmapper-row-num {
    UNIFIED PLOT SIDEBAR
    ======================================== */
 
-.plot-sidebar-wrapper {
-  width: 0;
-  overflow: hidden;
-  transition: width var(--transition-normal);
-  flex-shrink: 0;
-}
-
-.plot-sidebar-wrapper.open {
-  width: var(--sidebar-width);
-}
-
 .plot-sidebar {
   width: var(--sidebar-width);
   height: 100%;
@@ -3880,6 +3869,11 @@ td.cmapper-row-num {
   flex-direction: column;
   background: var(--color-surface);
   border-left: 1px solid var(--color-border-light);
+  flex-shrink: 0;
+}
+
+.plot-sidebar.closed {
+  display: none;
 }
 
 .plot-sidebar-tabs {

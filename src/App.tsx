@@ -180,9 +180,7 @@ function App() {
               <ScatterPlot />
               <PlotToolbar onToggleSidebar={toggleSidebar} sidebarOpen={sidebarOpen} />
             </div>
-            <aside className={`plot-sidebar-wrapper ${sidebarOpen ? 'open' : ''}`}>
-              <PlotSidebar onClose={toggleSidebar} />
-            </aside>
+            <PlotSidebar className={sidebarOpen ? '' : 'closed'} onClose={toggleSidebar} />
           </div>
         )}
       </main>

@@ -81,10 +81,11 @@ const TOOL_CATEGORIES: { category: string; tools: { id: PlotTool; label: string;
 type SectionId = 'visualization' | 'toolbar' | 'export';
 
 interface PlotSidebarProps {
+  className?: string;
   onClose?: () => void;
 }
 
-export function PlotSidebar({ onClose }: PlotSidebarProps) {
+export function PlotSidebar({ className, onClose }: PlotSidebarProps) {
   const {
     dataset,
     datasets,
@@ -262,7 +263,7 @@ export function PlotSidebar({ onClose }: PlotSidebarProps) {
   const visibleCount = visibleIds.size;
 
   return (
-    <div className="plot-sidebar">
+    <div className={`plot-sidebar ${className || ''}`}>
       {/* Tab bar */}
       <div className="plot-sidebar-tabs">
         <button

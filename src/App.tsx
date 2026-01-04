@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useAppStore } from './store/useAppStore';
 import {
   ScatterPlot,
@@ -19,13 +19,6 @@ function App() {
   const [mainTab, setMainTab] = useState<MainTab>('data');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Auto-switch to analysis tab when analysis is needed
-  useEffect(() => {
-    if (needsAnalysis) {
-      setMainTab('analysis');
-    }
-  }, [needsAnalysis]);
 
   // Handle save project
   const handleSaveProject = useCallback(async () => {

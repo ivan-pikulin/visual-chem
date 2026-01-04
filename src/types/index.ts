@@ -41,7 +41,42 @@ export interface ColumnInfo {
   name: string;
   type: 'number' | 'string';
   sampleValues: string[];
+  uniqueCount?: number; // For determining if column is categorical
+  uniqueValues?: string[]; // Unique values if categorical (<=15 unique)
 }
+
+// ========================================
+// Column Filters
+// ========================================
+
+export type NumericOperator = 'between' | 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'neq';
+export type TextOperator = 'contains' | 'equals' | 'startsWith' | 'endsWith' | 'regex';
+
+export interface NumericFilter {
+  type: 'numeric';
+  column: string;
+  operator: NumericOperator;
+  value?: number;
+  min?: number;
+  max?: number;
+}
+
+export interface TextFilter {
+  type: 'text';
+  column: string;
+  operator: TextOperator;
+  value: string;
+  caseSensitive: boolean;
+}
+
+export interface CategoryFilter {
+  type: 'category';
+  column: string;
+  selectedValues: string[];
+  excludeMode?: boolean; // If true, exclude selectedValues instead of include
+}
+
+export type ColumnFilter = NumericFilter | TextFilter | CategoryFilter;
 
 // Row selection mode for import limiting
 export type RowSelectionMode = 'first' | 'last' | 'random';
@@ -98,6 +133,8 @@ export interface Dataset {
   displaySettings?: DatasetDisplaySettings;
   // Loading state for background processing
   loadingState?: DatasetLoadingState;
+  // Column filters
+  filters?: ColumnFilter[];
 }
 
 export type DimensionalityMethod = 'tsne' | 'umap' | 'pca';
@@ -216,6 +253,7 @@ export interface VChemDatasetMetadata {
   displaySettings?: DatasetDisplaySettings;
   totalRows?: number;
   moleculeCount: number;
+  filters?: ColumnFilter[];
 }
 
 export interface VChemMoleculeData {
@@ -332,6 +370,13 @@ export interface AppState {
 
   // Actions - Dataset Display Settings
   setDatasetDisplaySettings: (id: string, settings: Partial<DatasetDisplaySettings>) => void;
+
+  // Actions - Column Filters
+  setDatasetFilters: (id: string, filters: ColumnFilter[]) => void;
+  addDatasetFilter: (id: string, filter: ColumnFilter) => void;
+  removeDatasetFilter: (id: string, columnName: string) => void;
+  clearDatasetFilters: (id: string) => void;
+  getFilteredMolecules: (id: string) => ProcessedMolecule[];
 
   // Actions - Dataset Loading State
   setDatasetLoadingState: (id: string, state: Partial<DatasetLoadingState>) => void;

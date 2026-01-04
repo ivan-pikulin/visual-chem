@@ -165,6 +165,7 @@ export async function saveProject(
       displaySettings: dataset.displaySettings,
       totalRows: dataset.totalRows,
       moleculeCount: dataset.molecules.length,
+      filters: dataset.filters,
     };
     datasetFolder!.file('metadata.json', JSON.stringify(metadata, null, 2));
 
@@ -342,6 +343,7 @@ export async function loadProject(file: File): Promise<LoadProjectResult> {
       groups: metadata.groups,
       displaySettings: metadata.displaySettings,
       totalRows: metadata.totalRows,
+      filters: metadata.filters,
     });
   }
 

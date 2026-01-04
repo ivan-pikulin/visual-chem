@@ -6,6 +6,7 @@ import { useAppStore, DATASET_COLORS } from '../store/useAppStore';
 import { CLUSTER_COLORS } from '../lib/clustering';
 import { resolveLabelTemplate } from './LabelTemplateInput';
 import { evaluateExpression } from '../lib/expression';
+import { applyFilters } from '../utils/filterUtils';
 import type { PointShape, ProcessedMolecule } from '../types';
 
 const Plot = createPlotlyComponent(Plotly);
@@ -109,6 +110,11 @@ export function ScatterPlot() {
       let validMolecules = ds.molecules.filter(
         (m) => m.isValid && m.coordinates
       );
+
+      // Apply dataset filters
+      if (ds.filters && ds.filters.length > 0) {
+        validMolecules = applyFilters(validMolecules, ds.filters);
+      }
 
       // Filter out outliers if not showing them
       if (outlierSettings.enabled && !visualization.showOutliers) {

@@ -2,7 +2,10 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useAppStore, DATASET_COLORS } from '../store/useAppStore';
 import { FileUpload } from './FileUpload';
 import { LabelTemplateInput } from './LabelTemplateInput';
-import type { ColumnInfo } from '../types';
+import { ColumnFilterDropdown } from './ColumnFilterDropdown';
+import { ActiveFiltersBar } from './ActiveFiltersBar';
+import { applyFilters } from '../utils/filterUtils';
+import type { ColumnInfo, ColumnFilter } from '../types';
 
 // Column role definitions
 const COLUMN_ROLES = [
@@ -80,10 +83,19 @@ export function DataView({ onGoToAnalysis }: DataViewProps) {
     setGroupColumn,
     setSmilesColumn,
     setDatasetDisplaySettings,
+    addDatasetFilter,
+    removeDatasetFilter,
+    clearDatasetFilters,
   } = useAppStore();
 
   const [currentPage, setCurrentPage] = useState(0);
   const addFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Filter dropdown state
+  const [filterDropdown, setFilterDropdown] = useState<{
+    column: string;
+    anchorRect: DOMRect;
+  } | null>(null);
 
   // Confirmation popover state
   const [confirmPopover, setConfirmPopover] = useState<{
@@ -239,17 +251,65 @@ export function DataView({ onGoToAnalysis }: DataViewProps) {
     return activeDataset?.columnInfo?.find(c => c.name === columnName);
   }, [activeDataset?.columnInfo]);
 
-  // Pagination
-  const paginatedRows = useMemo(() => {
+  // Filtered molecules
+  const filteredMolecules = useMemo(() => {
     if (!activeDataset?.molecules) return [];
+    if (!activeDataset.filters || activeDataset.filters.length === 0) {
+      return activeDataset.molecules;
+    }
+    return applyFilters(activeDataset.molecules, activeDataset.filters);
+  }, [activeDataset?.molecules, activeDataset?.filters]);
+
+  // Get current filter for a column
+  const getFilterForColumn = useCallback((columnName: string): ColumnFilter | undefined => {
+    return activeDataset?.filters?.find(f => f.column === columnName);
+  }, [activeDataset?.filters]);
+
+  // Handle filter trigger click
+  const handleFilterClick = useCallback((columnName: string, event: React.MouseEvent) => {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    setFilterDropdown({ column: columnName, anchorRect: rect });
+  }, []);
+
+  // Handle filter apply
+  const handleFilterApply = useCallback((filter: ColumnFilter | null) => {
+    if (!activeDataset) return;
+    if (filter) {
+      addDatasetFilter(activeDataset.id, filter);
+    } else {
+      // Clear filter for this column
+      if (filterDropdown) {
+        removeDatasetFilter(activeDataset.id, filterDropdown.column);
+      }
+    }
+    setCurrentPage(0); // Reset to first page when filter changes
+  }, [activeDataset, addDatasetFilter, removeDatasetFilter, filterDropdown]);
+
+  // Handle filter remove from bar
+  const handleFilterRemove = useCallback((columnName: string) => {
+    if (!activeDataset) return;
+    removeDatasetFilter(activeDataset.id, columnName);
+    setCurrentPage(0);
+  }, [activeDataset, removeDatasetFilter]);
+
+  // Handle clear all filters
+  const handleClearAllFilters = useCallback(() => {
+    if (!activeDataset) return;
+    clearDatasetFilters(activeDataset.id);
+    setCurrentPage(0);
+  }, [activeDataset, clearDatasetFilters]);
+
+  // Pagination (uses filtered molecules)
+  const paginatedRows = useMemo(() => {
+    if (!filteredMolecules.length) return [];
     const start = currentPage * ROWS_PER_PAGE;
-    return activeDataset.molecules.slice(start, start + ROWS_PER_PAGE);
-  }, [activeDataset?.molecules, currentPage]);
+    return filteredMolecules.slice(start, start + ROWS_PER_PAGE);
+  }, [filteredMolecules, currentPage]);
 
   const totalPages = useMemo(() => {
-    if (!activeDataset?.molecules) return 0;
-    return Math.ceil(activeDataset.molecules.length / ROWS_PER_PAGE);
-  }, [activeDataset?.molecules]);
+    if (!filteredMolecules.length) return 0;
+    return Math.ceil(filteredMolecules.length / ROWS_PER_PAGE);
+  }, [filteredMolecules]);
 
   // Reset page when dataset changes
   const handleDatasetClick = useCallback((id: string) => {
@@ -462,6 +522,17 @@ export function DataView({ onGoToAnalysis }: DataViewProps) {
               </div>
             </div>
 
+            {/* Active Filters Bar */}
+            {activeDataset?.filters && activeDataset.filters.length > 0 && (
+              <ActiveFiltersBar
+                filters={activeDataset.filters}
+                onRemove={handleFilterRemove}
+                onClearAll={handleClearAllFilters}
+                filteredCount={filteredMolecules.length}
+                totalCount={activeDataset.molecules.length}
+              />
+            )}
+
             {/* Table */}
             <div className="dv-table-wrapper">
               <div className="dv-table-scroll">
@@ -486,6 +557,13 @@ export function DataView({ onGoToAnalysis }: DataViewProps) {
                                 >
                                   {info?.type === 'number' ? 'Σ' : 'Aa'}
                                 </span>
+                                <button
+                                  className={`dv-filter-trigger ${getFilterForColumn(header) ? 'active' : ''}`}
+                                  onClick={(e) => handleFilterClick(header, e)}
+                                  title="Filter column"
+                                >
+                                  ▼
+                                </button>
                               </div>
                               <div className="dv-role-toggles">
                                 {COLUMN_ROLES.map((role) => {
@@ -663,6 +741,19 @@ export function DataView({ onGoToAnalysis }: DataViewProps) {
           newExpression={confirmPopover.newExpression}
           onConfirm={handleConfirmReplace}
           onCancel={handleCancelReplace}
+        />
+      )}
+
+      {/* Filter dropdown */}
+      {filterDropdown && activeDataset && (
+        <ColumnFilterDropdown
+          column={filterDropdown.column}
+          columnInfo={getColumnInfo(filterDropdown.column) || { name: filterDropdown.column, type: 'string', sampleValues: [] }}
+          molecules={activeDataset.molecules}
+          currentFilter={getFilterForColumn(filterDropdown.column)}
+          onApply={handleFilterApply}
+          onClose={() => setFilterDropdown(null)}
+          anchorRect={filterDropdown.anchorRect}
         />
       )}
     </div>

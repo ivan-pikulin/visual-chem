@@ -16,7 +16,10 @@ import type {
   PointShape,
   DatasetDisplaySettings,
   DatasetLoadingState,
+  ColumnFilter,
+  ProcessedMolecule,
 } from '../types';
+import { applyFilters } from '../utils/filterUtils';
 
 const defaultTSNEParams: TSNEParams = {
   perplexity: 30,
@@ -493,6 +496,73 @@ export const useAppStore = create<AppState>((set) => ({
         dataset: getActiveDataset(datasets, state.activeDatasetId),
       };
     }),
+
+  // Actions - Column Filters
+  setDatasetFilters: (id: string, filters: ColumnFilter[]) =>
+    set((state) => {
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== id) return dataset;
+        return { ...dataset, filters };
+      });
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, state.activeDatasetId),
+      };
+    }),
+
+  addDatasetFilter: (id: string, filter: ColumnFilter) =>
+    set((state) => {
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== id) return dataset;
+        // Replace existing filter for same column or add new
+        const existingFilters = dataset.filters || [];
+        const filteredFilters = existingFilters.filter(f => f.column !== filter.column);
+        return { ...dataset, filters: [...filteredFilters, filter] };
+      });
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, state.activeDatasetId),
+      };
+    }),
+
+  removeDatasetFilter: (id: string, columnName: string) =>
+    set((state) => {
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== id) return dataset;
+        const filters = (dataset.filters || []).filter(f => f.column !== columnName);
+        return { ...dataset, filters: filters.length > 0 ? filters : undefined };
+      });
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, state.activeDatasetId),
+      };
+    }),
+
+  clearDatasetFilters: (id: string) =>
+    set((state) => {
+      const datasets = state.datasets.map((dataset) => {
+        if (dataset.id !== id) return dataset;
+        return { ...dataset, filters: undefined };
+      });
+
+      return {
+        datasets,
+        dataset: getActiveDataset(datasets, state.activeDatasetId),
+      };
+    }),
+
+  getFilteredMolecules: (id: string): ProcessedMolecule[] => {
+    const state = useAppStore.getState();
+    const dataset = state.datasets.find(d => d.id === id);
+    if (!dataset) return [];
+    if (!dataset.filters || dataset.filters.length === 0) {
+      return dataset.molecules;
+    }
+    return applyFilters(dataset.molecules, dataset.filters);
+  },
 
   // Actions - Dataset Loading State
   setDatasetLoadingState: (id: string, loadingState: Partial<DatasetLoadingState>) =>

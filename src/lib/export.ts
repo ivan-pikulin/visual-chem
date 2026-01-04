@@ -4,7 +4,7 @@ import { writeTextFile } from '@tauri-apps/plugin-fs';
 
 export async function exportPlotAsPNG(
   plotDiv: HTMLElement,
-  filename: string = 'visual-chem-plot'
+  filename: string = 'chemplot-plot'
 ): Promise<void> {
   await Plotly.downloadImage(plotDiv, {
     format: 'png',
@@ -16,7 +16,7 @@ export async function exportPlotAsPNG(
 
 export async function exportPlotAsSVG(
   plotDiv: HTMLElement,
-  filename: string = 'visual-chem-plot'
+  filename: string = 'chemplot-plot'
 ): Promise<void> {
   await Plotly.downloadImage(plotDiv, {
     format: 'svg',
@@ -29,14 +29,14 @@ export async function exportPlotAsSVG(
 export async function exportInteractiveHTML(
   plotData: Plotly.Data[],
   layout: Partial<Plotly.Layout>,
-  defaultFilename: string = 'visual-chem-plot.html'
+  defaultFilename: string = 'chemplot-plot.html'
 ): Promise<boolean> {
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Visual Chem Plot</title>
+  <title>ChemPlot</title>
   <script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
   <style>
     body { margin: 0; padding: 20px; font-family: system-ui, sans-serif; background: #f8fafc; }
@@ -45,7 +45,7 @@ export async function exportInteractiveHTML(
   </style>
 </head>
 <body>
-  <h1>Visual Chem - Chemical Space Visualization</h1>
+  <h1>ChemPlot - Chemical Space Visualization</h1>
   <div id="plot"></div>
   <script>
     const data = ${JSON.stringify(plotData)};
@@ -93,7 +93,7 @@ export async function exportDataAsCSV(
     y: number;
     cluster?: number;
   }>,
-  defaultFilename: string = 'visual-chem-data.csv'
+  defaultFilename: string = 'chemplot-data.csv'
 ): Promise<boolean> {
   // Build headers dynamically based on available data
   const headers = ['SMILES'];

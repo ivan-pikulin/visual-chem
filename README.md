@@ -1,4 +1,4 @@
-# VisualChem
+# ChemPlot
 
 Desktop application for interactive visualization of molecular datasets using dimensionality reduction.
 

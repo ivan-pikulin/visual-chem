@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Visual Chem",
+  "productName": "ChemPlot",
   "version": "0.1.0",
-  "identifier": "com.scd.visual-chem",
+  "identifier": "com.scd.chemplot",
   "build": {
     "beforeDevCommand": "yarn dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Visual Chem",
+        "title": "ChemPlot",
         "width": 800,
         "height": 600
       }

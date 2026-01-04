@@ -12,7 +12,7 @@
 import type { DimensionalityMethod, TSNEParams, UMAPParams } from '../../types';
 
 // Storage key for persisted coefficients
-const STORAGE_KEY = 'visual-chem-timing-coefficients';
+const STORAGE_KEY = 'chemplot-timing-coefficients';
 // Version for auto-reset when formula changes
 const COEFFICIENTS_VERSION = 2;
 

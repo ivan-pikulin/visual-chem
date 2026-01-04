@@ -2,10 +2,10 @@
  * DevTools utilities for timing inspection
  *
  * Usage in browser console:
- *   __visualChemTiming.showStatus()
- *   __visualChemTiming.showCoefficients()
- *   __visualChemTiming.reset()
- *   __visualChemTiming.testEstimate(1000, "tsne")
+ *   __chemplotTiming.showStatus()
+ *   __chemplotTiming.showCoefficients()
+ *   __chemplotTiming.reset()
+ *   __chemplotTiming.testEstimate(1000, "tsne")
  */
 
 import {
@@ -36,7 +36,7 @@ function showStatus(): void {
   console.log('  Last updated:', status.lastUpdated?.toLocaleString() || 'Never');
   console.log('');
   console.log('Coefficients adapt automatically as you run analyses.');
-  console.log('Use __visualChemTiming.showCoefficients() for details.');
+  console.log('Use __chemplotTiming.showCoefficients() for details.');
 }
 
 /**
@@ -93,13 +93,13 @@ const devToolsAPI: DevToolsAPI = {
  */
 export function registerDevTools(): void {
   if (typeof window !== 'undefined') {
-    (window as unknown as { __visualChemTiming: DevToolsAPI }).__visualChemTiming = devToolsAPI;
+    (window as unknown as { __chemplotTiming: DevToolsAPI }).__chemplotTiming = devToolsAPI;
 
-    console.log('⏱️ Visual Chem Timing DevTools registered!');
+    console.log('⏱️ ChemPlot Timing DevTools registered!');
     console.log('Commands:');
-    console.log('  __visualChemTiming.showStatus()        - Show calibration status');
-    console.log('  __visualChemTiming.showCoefficients()  - Show timing formulas');
-    console.log('  __visualChemTiming.reset()             - Reset to defaults');
-    console.log('  __visualChemTiming.testEstimate(1000)  - Test estimate for n samples');
+    console.log('  __chemplotTiming.showStatus()        - Show calibration status');
+    console.log('  __chemplotTiming.showCoefficients()  - Show timing formulas');
+    console.log('  __chemplotTiming.reset()             - Reset to defaults');
+    console.log('  __chemplotTiming.testEstimate(1000)  - Test estimate for n samples');
   }
 }

@@ -195,7 +195,7 @@ export function PlotSidebar({ className, onClose }: PlotSidebarProps) {
     }];
 
     const layout: Partial<Plotly.Layout> = {
-      title: { text: `Visual Chem - ${dataset.name}` },
+      title: { text: `ChemPlot - ${dataset.name}` },
       xaxis: { title: { text: 'Dimension 1' } },
       yaxis: { title: { text: 'Dimension 2' } },
     };

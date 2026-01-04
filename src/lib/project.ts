@@ -26,7 +26,7 @@ import type {
 } from '../types';
 
 const VCHEM_VERSION = '1.0.0';
-const APP_NAME = 'Visual Chem';
+const APP_NAME = 'ChemPlot';
 const APP_VERSION = '0.1.0';
 
 // ============ FINGERPRINT ENCODING ============

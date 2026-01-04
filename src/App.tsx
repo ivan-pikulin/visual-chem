@@ -15,7 +15,7 @@ import './index.css';
 type MainTab = 'data' | 'analysis' | 'plot';
 
 function App() {
-  const { datasets, dataset, needsAnalysis, setError, loadProjectState } = useAppStore();
+  const { datasets, needsAnalysis, setError, loadProjectState } = useAppStore();
   const [mainTab, setMainTab] = useState<MainTab>('data');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,13 +63,6 @@ function App() {
     // Reset input
     e.target.value = '';
   }, [loadProjectState, setError]);
-
-  // Switch to plot when first dataset is loaded with coordinates
-  useEffect(() => {
-    if (dataset?.molecules.some(m => m.coordinates)) {
-      setMainTab('plot');
-    }
-  }, [dataset?.molecules]);
 
   const toggleSidebar = useCallback(() => {
     setSidebarOpen((prev) => !prev);

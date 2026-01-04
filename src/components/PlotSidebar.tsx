@@ -98,7 +98,6 @@ export function PlotSidebar({ className, onClose }: PlotSidebarProps) {
     setVisualization,
     toolbar,
     toggleTool,
-    setActiveColumns,
     setDatasetVisible,
     setAllDatasetsVisible,
     setSelectedIndices,
@@ -152,10 +151,6 @@ export function PlotSidebar({ className, onClose }: PlotSidebarProps) {
   // Settings tab state
   const visibleDatasets = datasets.filter(d => d.visible !== false);
   const hasMultipleVisibleDatasets = visibleDatasets.length > 1;
-  const labelColumns = dataset?.columnMapping?.labels || [];
-  const labelTemplate = visualization.activeColumns.labelTemplate || '';
-  const allColumns = useMemo(() => dataset?.csvHeaders || [], [dataset?.csvHeaders]);
-  const columnInfo = useMemo(() => dataset?.columnInfo || [], [dataset?.columnInfo]);
 
   const [openSections, setOpenSections] = useState<Set<SectionId>>(new Set(['visualization']));
 
@@ -445,52 +440,71 @@ export function PlotSidebar({ className, onClose }: PlotSidebarProps) {
                   </div>
                 </div>
 
-                {allColumns.length > 0 && (
-                  <div className="param-group">
-                    <div className="param-label">
-                      <span className="param-name">Value</span>
-                      <span className="param-hint">Numeric only. Supports: @col, +, -, *, /, abs(), log()</span>
-                    </div>
-                    <LabelTemplateInput
-                      value={dataset?.displaySettings?.valueExpression || ''}
-                      onChange={(value) => dataset && setDatasetDisplaySettings(dataset.id, { valueExpression: value })}
-                      columns={allColumns}
-                      columnInfo={columnInfo}
-                      columnTypeFilter="number"
-                      placeholder="e.g., @pKi or abs(@a - @b)"
-                    />
-                  </div>
-                )}
+                {/* Per-dataset Value and Label settings */}
+                {visibleDatasets.map((ds) => {
+                  const dsColumns = ds.csvHeaders || [];
+                  const dsColumnInfo = ds.columnInfo || [];
+                  const dsLabelColumns = ds.columnMapping?.labels || [];
 
-                {allColumns.length > 0 && (
-                  <div className="param-group">
-                    <div className="param-label">
-                      <span className="param-name">Label Template</span>
-                      <span className="param-hint">Use @column to insert column values</span>
-                    </div>
-                    <LabelTemplateInput
-                      value={labelTemplate}
-                      onChange={(value) => setActiveColumns({ labelTemplate: value })}
-                      columns={allColumns}
-                      placeholder="e.g., Name: @name, Value: @logK"
-                    />
-                    {labelColumns.length > 0 && (
-                      <div className="label-template-presets">
-                        <span className="label-template-presets-label">Quick:</span>
-                        {labelColumns.slice(0, 4).map((col) => (
-                          <button
-                            key={col}
-                            type="button"
-                            className="label-template-preset-btn"
-                            onClick={() => setActiveColumns({ labelTemplate: `${col}: @${col}` })}
-                          >
-                            {col}
-                          </button>
-                        ))}
+                  if (dsColumns.length === 0) return null;
+
+                  return (
+                    <div key={ds.id} className="per-dataset-settings">
+                      {hasMultipleVisibleDatasets && (
+                        <div className="per-dataset-header">
+                          <span
+                            className="per-dataset-color"
+                            style={{ backgroundColor: ds.color }}
+                          />
+                          <span className="per-dataset-name">{ds.name}</span>
+                        </div>
+                      )}
+
+                      <div className="param-group">
+                        <div className="param-label">
+                          <span className="param-name">Value</span>
+                          <span className="param-hint">Numeric only. Supports: @col, +, -, *, /, abs(), log()</span>
+                        </div>
+                        <LabelTemplateInput
+                          value={ds.displaySettings?.valueExpression || ''}
+                          onChange={(value) => setDatasetDisplaySettings(ds.id, { valueExpression: value })}
+                          columns={dsColumns}
+                          columnInfo={dsColumnInfo}
+                          columnTypeFilter="number"
+                          placeholder="e.g., @pKi or abs(@a - @b)"
+                        />
                       </div>
-                    )}
-                  </div>
-                )}
+
+                      <div className="param-group">
+                        <div className="param-label">
+                          <span className="param-name">Label Template</span>
+                          <span className="param-hint">Use @column to insert column values</span>
+                        </div>
+                        <LabelTemplateInput
+                          value={ds.displaySettings?.labelTemplate || ''}
+                          onChange={(value) => setDatasetDisplaySettings(ds.id, { labelTemplate: value })}
+                          columns={dsColumns}
+                          placeholder="e.g., Name: @name, Value: @logK"
+                        />
+                        {dsLabelColumns.length > 0 && (
+                          <div className="label-template-presets">
+                            <span className="label-template-presets-label">Quick:</span>
+                            {dsLabelColumns.slice(0, 4).map((col) => (
+                              <button
+                                key={col}
+                                type="button"
+                                className="label-template-preset-btn"
+                                onClick={() => setDatasetDisplaySettings(ds.id, { labelTemplate: `@${col}` })}
+                              >
+                                {col}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
 
                 {outlierSettings.enabled && (
                   <div className="toggle-container">

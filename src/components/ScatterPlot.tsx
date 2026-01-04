@@ -5,6 +5,7 @@ import type { PlotHoverEvent, PlotRelayoutEvent, PlotSelectionEvent } from 'plot
 import { useAppStore, DATASET_COLORS } from '../store/useAppStore';
 import { CLUSTER_COLORS } from '../lib/clustering';
 import { resolveLabelTemplate } from './LabelTemplateInput';
+import { evaluateExpression } from '../lib/expression';
 import type { PointShape, ProcessedMolecule } from '../types';
 
 const Plot = createPlotlyComponent(Plotly);
@@ -88,10 +89,9 @@ export function ScatterPlot() {
     };
   }, []);
 
-  // Get active columns for dynamic value/label lookup
-  const activeValueColumn = visualization.activeColumns.value;
-  const activeLabelColumn = visualization.activeColumns.label;
-  const labelTemplate = visualization.activeColumns.labelTemplate;
+  // Note: labelTemplate is now per-dataset in displaySettings
+  // activeColumns.labelTemplate is kept for backward compatibility
+  const globalLabelTemplate = visualization.activeColumns.labelTemplate;
 
   // Filter visible datasets
   const visibleDatasets = useMemo(() => {
@@ -120,27 +120,30 @@ export function ScatterPlot() {
       const x = validMolecules.map((m) => m.coordinates!.x);
       const y = validMolecules.map((m) => m.coordinates!.y);
 
-      // Get values from active value column (dynamic lookup from originalRow)
+      // Get valueExpression from dataset's displaySettings
+      const valueExpression = ds.displaySettings?.valueExpression;
+
+      // Get values using expression evaluation
       const values = validMolecules.map((m) => {
-        if (activeValueColumn && m.originalRow) {
-          const val = m.originalRow[activeValueColumn];
-          const num = parseFloat(String(val));
-          return !isNaN(num) ? num : undefined;
+        if (valueExpression && m.originalRow) {
+          const computed = evaluateExpression(valueExpression, m.originalRow);
+          if (computed !== undefined) {
+            return computed;
+          }
         }
         return m.value;
       });
 
       const smiles = validMolecules.map((m) => m.smiles);
 
+      // Get labelTemplate from dataset's displaySettings (fallback to global)
+      const labelTemplate = ds.displaySettings?.labelTemplate || globalLabelTemplate;
+
       // Get labels
       const labels = validMolecules.map((m) => {
         if (labelTemplate && m.originalRow) {
           const resolved = resolveLabelTemplate(labelTemplate, m.originalRow);
           return resolved || undefined;
-        }
-        if (activeLabelColumn && m.originalRow) {
-          const val = m.originalRow[activeLabelColumn];
-          return val !== null && val !== undefined ? String(val) : undefined;
         }
         return m.label;
       });
@@ -209,7 +212,7 @@ export function ScatterPlot() {
           ...(visualization.colorMode === 'value' && Array.isArray(markerColor) && {
             colorscale: 'Inferno',
             colorbar: dsIndex === 0 ? {
-              title: { text: activeValueColumn || 'Value', font: { size: 12 } },
+              title: { text: valueExpression || 'Value', font: { size: 12 } },
               thickness: 12,
               len: 0.8,
               tickfont: { size: 10 },
@@ -234,7 +237,7 @@ export function ScatterPlot() {
     });
 
     return { traces, allMolecules };
-  }, [visibleDatasets, visualization, clustering.enabled, clusterLabels, outlierSettings, activeValueColumn, activeLabelColumn, labelTemplate, dataset]);
+  }, [visibleDatasets, visualization, clustering.enabled, clusterLabels, outlierSettings, globalLabelTemplate, dataset]);
 
   // Compute which tools to remove
   const modeBarButtonsToRemove = useMemo(() => {
@@ -313,10 +316,15 @@ export function ScatterPlot() {
     setSelectedIndices([]);
   }, [setSelectedIndices]);
 
-  // Check if we have any value range for coloring
+  // Check if we have any value data for coloring (either valueRange or valueExpression)
   const hasValueRange = useMemo(() => {
-    return visibleDatasets.some(ds => ds.valueRange !== null);
+    return visibleDatasets.some(ds =>
+      ds.valueRange !== null || ds.displaySettings?.valueExpression
+    );
   }, [visibleDatasets]);
+
+  // Get the first dataset's valueExpression for tooltip display
+  const activeValueExpression = dataset?.displaySettings?.valueExpression;
 
   if (!plotTraces || plotTraces.traces.length === 0) {
     return (
@@ -404,7 +412,7 @@ export function ScatterPlot() {
           position={tooltipPos}
           showCluster={clustering.enabled}
           showValue={hasValueRange}
-          valueColumnName={activeValueColumn}
+          valueColumnName={activeValueExpression}
           showDataset={visibleDatasets.length > 1}
         />
       )}

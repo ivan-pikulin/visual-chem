@@ -5,6 +5,9 @@ import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import Mention from '@tiptap/extension-mention';
 import Placeholder from '@tiptap/extension-placeholder';
+import History from '@tiptap/extension-history';
+import HardBreak from '@tiptap/extension-hard-break';
+import Gapcursor from '@tiptap/extension-gapcursor';
 import { SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
 import type { ColumnInfo } from '../types';
 
@@ -57,7 +60,7 @@ const MentionList = forwardRef<MentionListRef, MentionListProps>(
           setSelectedIndex((prev) => (prev < items.length - 1 ? prev + 1 : 0));
           return true;
         }
-        if (event.key === 'Enter') {
+        if (event.key === 'Enter' || event.key === 'Tab') {
           selectItem(selectedIndex);
           return true;
         }
@@ -168,6 +171,9 @@ export function LabelTemplateInput({
       Document,
       Paragraph,
       Text,
+      History,
+      HardBreak,
+      Gapcursor,
       Placeholder.configure({
         placeholder,
       }),
@@ -183,6 +189,8 @@ export function LabelTemplateInput({
           ];
         },
         suggestion: {
+          // null = allow @ trigger after any character or at start of line
+          allowedPrefixes: null,
           items: ({ query }: { query: string }) => {
             return filteredColumnsRef.current
               .filter((col) => col.toLowerCase().includes(query.toLowerCase()))

@@ -1,4 +1,4 @@
-import { useCallback, useState, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { reduceDimensionality } from '../lib/dimensionality';
 import { OperationCancelledError } from '../lib/fingerprints';
@@ -24,12 +24,6 @@ const WarningIcon = () => (
   </svg>
 );
 
-const ChevronDownIcon = () => (
-  <svg className="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M6 9l6 6 6-6" />
-  </svg>
-);
-
 const DataIcon = () => (
   <svg className="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
@@ -40,13 +34,6 @@ const MethodIcon = () => (
   <svg className="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <circle cx="12" cy="12" r="3" />
     <path d="M12 2v4m0 12v4m10-10h-4M6 12H2m15.07-5.07l-2.83 2.83m-4.48 4.48l-2.83 2.83m0-10.14l2.83 2.83m4.48 4.48l2.83 2.83" />
-  </svg>
-);
-
-const ParamsIcon = () => (
-  <svg className="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707" />
-    <circle cx="12" cy="12" r="4" />
   </svg>
 );
 
@@ -82,8 +69,6 @@ const PlayIcon = () => (
   </svg>
 );
 
-type SectionId = 'data' | 'method' | 'params' | 'postprocess';
-
 interface AnalysisPanelProps {
   onGoToData?: (datasetId?: string) => void;
 }
@@ -113,22 +98,6 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
     updateAllClusters,
     updateAllOutliers,
   } = useAppStore();
-
-  const [openSections, setOpenSections] = useState<Set<SectionId>>(
-    new Set(['method', 'params'])
-  );
-
-  const toggleSection = (id: SectionId) => {
-    setOpenSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
 
   // Count all valid molecules across all datasets
   const totalValidMolecules = datasets.reduce((sum, ds) => {
@@ -276,21 +245,6 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
     }
   };
 
-  const handleRunClustering = useCallback(() => {
-    const allCoordinates: { x: number; y: number }[] = [];
-    for (const ds of datasets) {
-      const validMolecules = ds.molecules.filter((m) => m.isValid && m.coordinates);
-      for (const mol of validMolecules) {
-        allCoordinates.push(mol.coordinates!);
-      }
-    }
-
-    if (allCoordinates.length === 0) return;
-
-    const clusterResult = computeKMeans(allCoordinates, clustering.nClusters);
-    updateAllClusters(clusterResult.labels);
-  }, [datasets, clustering.nClusters, updateAllClusters]);
-
   // Find datasets that need configuration
   const unconfiguredDatasets = useMemo(() => {
     return datasets.filter(ds => !ds.columnMapping?.smiles);
@@ -331,116 +285,93 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
         </div>
       )}
 
-      <div className="analysis-sections">
-        {/* Data Summary Section */}
-        <div className={`settings-section ${openSections.has('data') ? 'open' : ''}`}>
-          <div className="section-header" onClick={() => toggleSection('data')}>
-            <div className="section-header-left">
+      {/* Compact Data Summary Bar */}
+      {configuredDatasets.length > 0 && (
+        <div className="data-summary-bar">
+          <div className="data-summary-bar-left">
+            <div className="data-summary-bar-icon">
               <DataIcon />
-              <span className="section-title">Data Summary</span>
             </div>
-            <div className="section-header-right">
-              <span className="section-badge">
-                {configuredDatasets.length} dataset{configuredDatasets.length !== 1 ? 's' : ''} • {totalValidMolecules.toLocaleString()} molecules
+            <div className="data-summary-bar-text">
+              <span className="data-summary-bar-title">
+                {totalValidMolecules.toLocaleString()} molecules ready
               </span>
-              <ChevronDownIcon />
+              <span className="data-summary-bar-meta">
+                2048-bit fingerprints
+              </span>
             </div>
           </div>
-          <div className="section-content">
-            {configuredDatasets.length > 0 ? (
-              <div className="data-summary-list">
-                {configuredDatasets.map(ds => {
-                  const validCount = ds.molecules.filter(m => m.isValid).length;
-                  return (
-                    <div key={ds.id} className="data-summary-item">
-                      <span
-                        className="data-summary-dot"
-                        style={{ backgroundColor: ds.color }}
-                      />
-                      <span className="data-summary-name">{ds.name}</span>
-                      <span className="data-summary-count">{validCount.toLocaleString()}</span>
-                    </div>
-                  );
-                })}
+          <div className="data-summary-bar-right">
+            {configuredDatasets.map(ds => (
+              <div key={ds.id} className="dataset-chip">
+                <span className="dataset-chip-dot" style={{ backgroundColor: ds.color }} />
+                {ds.name}
               </div>
-            ) : (
-              <p className="empty-state-text">
-                No datasets configured. Go to Data tab to load and configure datasets.
-              </p>
-            )}
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Two column grid */}
+      <div className="analysis-grid">
+        {/* Method Selection */}
+        <div className="analysis-card-compact">
+          <div className="card-title">Reduction Method</div>
+          <div className="method-selector-wide">
+            {(['pca', 'umap', 'tsne'] as const).map((method) => (
+              <button
+                key={method}
+                onClick={() => handleMethodChange(method)}
+                disabled={isLoading}
+                className={`method-btn ${drMethod === method ? 'active' : ''}`}
+              >
+                <span className="method-btn-name">{method === 'tsne' ? 't-SNE' : method.toUpperCase()}</span>
+                <span className="method-btn-desc">
+                  {method === 'pca' && 'Fast, linear'}
+                  {method === 'umap' && 'Balanced'}
+                  {method === 'tsne' && 'Best quality'}
+                </span>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Reduction Method Section */}
-        <div className={`settings-section ${openSections.has('method') ? 'open' : ''}`}>
-          <div className="section-header" onClick={() => toggleSection('method')}>
-            <div className="section-header-left">
-              <MethodIcon />
-              <span className="section-title">Reduction Method</span>
-            </div>
-            <div className="section-header-right">
-              <span className="section-badge section-badge-accent">{drMethod.toUpperCase()}</span>
-              <ChevronDownIcon />
-            </div>
-          </div>
-          <div className="section-content">
-            <div className="method-selector">
-              {(['pca', 'umap', 'tsne'] as const).map((method) => (
-                <button
-                  key={method}
-                  onClick={() => handleMethodChange(method)}
-                  disabled={isLoading}
-                  className={`method-btn ${drMethod === method ? 'active' : ''}`}
-                >
-                  <span className="method-btn-name">{method.toUpperCase()}</span>
-                  <span className="method-btn-desc">
-                    {method === 'pca' && 'Fast, linear'}
-                    {method === 'umap' && 'Balanced'}
-                    {method === 'tsne' && 'Best quality'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Parameters Section - only for UMAP/t-SNE */}
-        {drMethod !== 'pca' && (
-          <div className={`settings-section ${openSections.has('params') ? 'open' : ''}`}>
-            <div className="section-header" onClick={() => toggleSection('params')}>
-              <div className="section-header-left">
-                <ParamsIcon />
-                <span className="section-title">{drMethod.toUpperCase()} Parameters</span>
+        {/* Parameters */}
+        <div className="analysis-card-compact">
+          {drMethod === 'pca' ? (
+            <>
+              <div className="card-title">PCA</div>
+              <div className="pca-info-box" style={{ margin: 0, border: 'none', background: 'transparent', padding: 0 }}>
+                <InfoIcon />
+                <span>Fast and deterministic with no adjustable parameters.</span>
               </div>
-              <ChevronDownIcon />
-            </div>
-            <div className="section-content">
-              {drMethod === 'tsne' && (
-                <>
-                  {tsneRecs && (
-                    <button
-                      className="btn btn-secondary btn-sm apply-recommended-btn"
-                      onClick={applyTSNERecommendations}
-                      disabled={isLoading}
-                    >
-                      <CheckIcon />
-                      Apply recommended for {totalValidMolecules.toLocaleString()} molecules
-                    </button>
-                  )}
-
-                  <div className="param-group">
-                    <div className="param-label">
-                      <span className="param-name">Perplexity</span>
-                      <span className={`param-value ${perplexityStatus?.inRange ? '' : 'param-value-warning'}`}>
-                        {tsneParams.perplexity}
-                        {perplexityStatus && !perplexityStatus.inRange && (
-                          <span className="param-deviation">
-                            ({perplexityStatus.deviation.direction === 'low' ? '↓' : '↑'})
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="param-slider-container">
+            </>
+          ) : (
+            <>
+              <div className="params-header">
+                <div className="card-title">{drMethod === 'tsne' ? 't-SNE' : 'UMAP'} Parameters</div>
+                {(drMethod === 'tsne' ? tsneRecs : umapRecs) && (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={drMethod === 'tsne' ? applyTSNERecommendations : applyUMAPRecommendations}
+                    disabled={isLoading}
+                    style={{ padding: '4px 10px', fontSize: '11px' }}
+                  >
+                    <CheckIcon />
+                    Apply recommended
+                  </button>
+                )}
+              </div>
+              <div className="params-grid">
+                {drMethod === 'tsne' && (
+                  <>
+                    <div className="param-group">
+                      <div className="param-label">
+                        <span className="param-name">Perplexity</span>
+                        <span className={`param-value ${perplexityStatus?.inRange ? '' : 'param-value-warning'}`}>
+                          {tsneParams.perplexity}
+                        </span>
+                      </div>
                       <input
                         type="range"
                         min={perplexityStatus?.rec.range.min ?? 5}
@@ -452,92 +383,54 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
                         }}
                         disabled={isLoading}
                       />
-                      {perplexityStatus && (
-                        <div
-                          className="param-recommended-marker"
-                          style={{
-                            left: `${((perplexityStatus.rec.range.recommended - perplexityStatus.rec.range.min) /
-                              (perplexityStatus.rec.range.max - perplexityStatus.rec.range.min)) * 100}%`
-                          }}
-                          title={`Recommended: ${perplexityStatus.rec.range.recommended}`}
-                        />
-                      )}
                     </div>
-                    {perplexityStatus && (
-                      <p className="param-hint param-recommendation">
-                        <InfoIcon />
-                        {perplexityStatus.rec.range.description}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="param-group">
-                    <div className="param-label">
-                      <span className="param-name">Iterations</span>
-                      <span className="param-value">{tsneParams.iterations}</span>
+                    <div className="param-group">
+                      <div className="param-label">
+                        <span className="param-name">Iterations</span>
+                        <span className="param-value">{tsneParams.iterations}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={250}
+                        max={2000}
+                        step={250}
+                        value={tsneParams.iterations}
+                        onChange={(e) => {
+                          setTSNEParams({ iterations: parseInt(e.target.value) });
+                          if (hasData) setNeedsAnalysis(true);
+                        }}
+                        disabled={isLoading}
+                      />
                     </div>
-                    <input
-                      type="range"
-                      min={250}
-                      max={2000}
-                      step={250}
-                      value={tsneParams.iterations}
-                      onChange={(e) => {
-                        setTSNEParams({ iterations: parseInt(e.target.value) });
-                        if (hasData) setNeedsAnalysis(true);
-                      }}
-                      disabled={isLoading}
-                    />
-                    <p className="param-hint">More iterations = better quality, slower</p>
-                  </div>
-
-                  <div className="param-group">
-                    <div className="param-label">
-                      <span className="param-name">Learning Rate</span>
-                      <span className="param-value">{tsneParams.learningRate}</span>
+                    <div className="param-group">
+                      <div className="param-label">
+                        <span className="param-name">Learning Rate</span>
+                        <span className="param-value">{tsneParams.learningRate}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={10}
+                        max={1000}
+                        step={10}
+                        value={tsneParams.learningRate}
+                        onChange={(e) => {
+                          setTSNEParams({ learningRate: parseInt(e.target.value) });
+                          if (hasData) setNeedsAnalysis(true);
+                        }}
+                        disabled={isLoading}
+                      />
                     </div>
-                    <input
-                      type="range"
-                      min={10}
-                      max={1000}
-                      step={10}
-                      value={tsneParams.learningRate}
-                      onChange={(e) => {
-                        setTSNEParams({ learningRate: parseInt(e.target.value) });
-                        if (hasData) setNeedsAnalysis(true);
-                      }}
-                      disabled={isLoading}
-                    />
-                  </div>
-                </>
-              )}
-
-              {drMethod === 'umap' && (
-                <>
-                  {umapRecs && (
-                    <button
-                      className="btn btn-secondary btn-sm apply-recommended-btn"
-                      onClick={applyUMAPRecommendations}
-                      disabled={isLoading}
-                    >
-                      <CheckIcon />
-                      Apply recommended for {totalValidMolecules.toLocaleString()} molecules
-                    </button>
-                  )}
-
-                  <div className="param-group">
-                    <div className="param-label">
-                      <span className="param-name">Neighbors</span>
-                      <span className={`param-value ${neighborsStatus?.inRange ? '' : 'param-value-warning'}`}>
-                        {umapParams.nNeighbors}
-                        {neighborsStatus && !neighborsStatus.inRange && (
-                          <span className="param-deviation">
-                            ({neighborsStatus.deviation.direction === 'low' ? '↓' : '↑'})
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="param-slider-container">
+                  </>
+                )}
+                {drMethod === 'umap' && (
+                  <>
+                    <div className="param-group">
+                      <div className="param-label">
+                        <span className="param-name">Neighbors</span>
+                        <span className={`param-value ${neighborsStatus?.inRange ? '' : 'param-value-warning'}`}>
+                          {umapParams.nNeighbors}
+                        </span>
+                      </div>
                       <input
                         type="range"
                         min={neighborsStatus?.rec.range.min ?? 2}
@@ -549,99 +442,57 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
                         }}
                         disabled={isLoading}
                       />
-                      {neighborsStatus && (
-                        <div
-                          className="param-recommended-marker"
-                          style={{
-                            left: `${((neighborsStatus.rec.range.recommended - neighborsStatus.rec.range.min) /
-                              (neighborsStatus.rec.range.max - neighborsStatus.rec.range.min)) * 100}%`
-                          }}
-                          title={`Recommended: ${neighborsStatus.rec.range.recommended}`}
-                        />
-                      )}
                     </div>
-                    {neighborsStatus && (
-                      <p className="param-hint param-recommendation">
-                        <InfoIcon />
-                        {neighborsStatus.rec.range.description}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="param-group">
-                    <div className="param-label">
-                      <span className="param-name">Min Distance</span>
-                      <span className="param-value">{umapParams.minDist.toFixed(2)}</span>
+                    <div className="param-group">
+                      <div className="param-label">
+                        <span className="param-name">Min Distance</span>
+                        <span className="param-value">{umapParams.minDist.toFixed(2)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={0.99}
+                        step={0.01}
+                        value={umapParams.minDist}
+                        onChange={(e) => {
+                          setUMAPParams({ minDist: parseFloat(e.target.value) });
+                          if (hasData) setNeedsAnalysis(true);
+                        }}
+                        disabled={isLoading}
+                      />
                     </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={0.99}
-                      step={0.01}
-                      value={umapParams.minDist}
-                      onChange={(e) => {
-                        setUMAPParams({ minDist: parseFloat(e.target.value) });
-                        if (hasData) setNeedsAnalysis(true);
-                      }}
-                      disabled={isLoading}
-                    />
-                    <p className="param-hint">Lower = tighter clusters, higher = more spread</p>
-                  </div>
-
-                  <div className="param-group">
-                    <div className="param-label">
-                      <span className="param-name">Epochs</span>
-                      <span className="param-value">{umapParams.nEpochs}</span>
+                    <div className="param-group">
+                      <div className="param-label">
+                        <span className="param-name">Epochs</span>
+                        <span className="param-value">{umapParams.nEpochs}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={100}
+                        max={1000}
+                        step={50}
+                        value={umapParams.nEpochs}
+                        onChange={(e) => {
+                          setUMAPParams({ nEpochs: parseInt(e.target.value) });
+                          if (hasData) setNeedsAnalysis(true);
+                        }}
+                        disabled={isLoading}
+                      />
                     </div>
-                    <input
-                      type="range"
-                      min={100}
-                      max={1000}
-                      step={50}
-                      value={umapParams.nEpochs}
-                      onChange={(e) => {
-                        setUMAPParams({ nEpochs: parseInt(e.target.value) });
-                        if (hasData) setNeedsAnalysis(true);
-                      }}
-                      disabled={isLoading}
-                    />
-                    <p className="param-hint">More epochs = better convergence, slower</p>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
 
-        {/* PCA info when selected */}
-        {drMethod === 'pca' && (
-          <div className="pca-info-box">
-            <InfoIcon />
-            <span>PCA is fast and deterministic with no adjustable parameters.</span>
-          </div>
-        )}
-
-        {/* Post-Processing Section */}
-        <div className={`settings-section ${openSections.has('postprocess') ? 'open' : ''}`}>
-          <div className="section-header" onClick={() => toggleSection('postprocess')}>
-            <div className="section-header-left">
-              <PostProcessIcon />
-              <span className="section-title">Post-Processing</span>
-            </div>
-            <div className="section-header-right">
-              {(clustering.enabled || outlierSettings.enabled) && (
-                <span className="section-badge">
-                  {[clustering.enabled && 'Clustering', outlierSettings.enabled && 'Outliers'].filter(Boolean).join(' + ')}
-                </span>
-              )}
-              <ChevronDownIcon />
-            </div>
-          </div>
-          <div className="section-content">
+        {/* Post-Processing - full width */}
+        <div className="analysis-card-compact analysis-grid-full">
+          <div className="card-title">Post-Processing</div>
+          <div className="postprocess-row">
             {/* Clustering */}
-            <div className="postprocess-block">
-              <div className="toggle-container">
-                <span className="toggle-label">K-Means Clustering</span>
+            <div className="postprocess-item">
+              <div className="postprocess-toggle-group">
                 <label className="toggle">
                   <input
                     type="checkbox"
@@ -655,44 +506,31 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
                   <span className="toggle-track" />
                   <span className="toggle-thumb" />
                 </label>
+                <span className="postprocess-label">K-Means Clustering</span>
               </div>
-
-              {clustering.enabled && (
-                <>
-                  <div className="param-group">
-                    <div className="param-label">
-                      <span className="param-name">Number of Clusters (K)</span>
-                      <span className="param-value">{clustering.nClusters}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={2}
-                      max={10}
-                      value={clustering.nClusters}
-                      onChange={(e) => {
-                        setNClusters(parseInt(e.target.value));
-                        if (hasData) setNeedsAnalysis(true);
-                      }}
-                      disabled={isLoading}
-                    />
-                  </div>
-                  {datasets.some(ds => ds.molecules.some(m => m.coordinates)) && (
-                    <button
-                      onClick={handleRunClustering}
-                      disabled={isLoading}
-                      className="btn btn-secondary btn-sm"
-                    >
-                      Update Clusters Only
-                    </button>
-                  )}
-                </>
-              )}
+              <div className="postprocess-control">
+                <span className="postprocess-input-label">K =</span>
+                <input
+                  type="number"
+                  className="postprocess-input"
+                  value={clustering.nClusters}
+                  min={2}
+                  max={10}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (val >= 2 && val <= 10) {
+                      setNClusters(val);
+                      if (hasData) setNeedsAnalysis(true);
+                    }
+                  }}
+                  disabled={isLoading || !clustering.enabled}
+                />
+              </div>
             </div>
 
-            {/* Outlier Detection */}
-            <div className="postprocess-block">
-              <div className="toggle-container">
-                <span className="toggle-label">Outlier Detection</span>
+            {/* Outliers */}
+            <div className="postprocess-item">
+              <div className="postprocess-toggle-group">
                 <label className="toggle">
                   <input
                     type="checkbox"
@@ -706,66 +544,65 @@ export function AnalysisPanel({ onGoToData }: AnalysisPanelProps) {
                   <span className="toggle-track" />
                   <span className="toggle-thumb" />
                 </label>
+                <span className="postprocess-label">Remove Outliers</span>
               </div>
-
-              {outlierSettings.enabled && (
-                <div className="param-group">
-                  <div className="param-label">
-                    <span className="param-name">Z-Score Threshold</span>
-                    <span className="param-value">{outlierSettings.threshold.toFixed(1)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={1.5}
-                    max={5}
-                    step={0.1}
-                    value={outlierSettings.threshold}
-                    onChange={(e) => {
-                      setOutlierSettings({ threshold: parseFloat(e.target.value) });
+              <div className="postprocess-control">
+                <span className="postprocess-input-label">σ =</span>
+                <input
+                  type="number"
+                  className="postprocess-input"
+                  value={outlierSettings.threshold}
+                  min={1.5}
+                  max={5}
+                  step={0.1}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (val >= 1.5 && val <= 5) {
+                      setOutlierSettings({ threshold: val });
                       if (hasData) setNeedsAnalysis(true);
-                    }}
-                    disabled={isLoading}
-                  />
-                  <p className="param-hint">
-                    Points with Z-score &gt; {outlierSettings.threshold.toFixed(1)} will be marked as outliers
-                  </p>
-                </div>
-              )}
+                    }
+                  }}
+                  disabled={isLoading || !outlierSettings.enabled}
+                />
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Sticky Footer - Run Analysis */}
-      <div className="analysis-footer">
-        <div className="analysis-footer-content">
-          {needsAnalysis && canRun && (
-            <p className="analysis-footer-hint">Settings changed — click to update</p>
-          )}
-          {!hasData && (
-            <p className="analysis-footer-hint">Load data in the Data tab first</p>
-          )}
-          {hasData && configuredDatasets.length === 0 && (
-            <p className="analysis-footer-hint">Configure SMILES column for at least one dataset</p>
-          )}
-
-          <div className="analysis-footer-row">
-            <button
-              onClick={handleRunAnalysis}
-              disabled={!canRun}
-              className={`btn btn-primary btn-large analysis-run-btn ${needsAnalysis && canRun ? 'btn-accent pulse' : ''}`}
-            >
-              <PlayIcon />
-              {isLoading ? 'Processing...' : needsAnalysis ? 'Run Analysis' : 'Reanalyze'}
-            </button>
-
-            {timeEstimate && !isLoading && canRun && (
-              <div className={`time-estimate time-estimate-${timeEstimate.confidence}`} title="Estimated time">
-                <ClockIcon />
-                <span>{timeEstimate.formatted}</span>
-              </div>
-            )}
+      {/* Compact Footer */}
+      <div className="analysis-footer-wide">
+        <div className="footer-info">
+          <div className="footer-status-item">
+            <span className="footer-status-dot" />
+            {totalValidMolecules.toLocaleString()} molecules
           </div>
+          <div className="footer-status-item">
+            <MethodIcon />
+            {drMethod === 'tsne' ? 't-SNE' : drMethod.toUpperCase()}
+          </div>
+          {clustering.enabled && (
+            <div className="footer-status-item">
+              <PostProcessIcon />
+              K={clustering.nClusters}
+            </div>
+          )}
+        </div>
+        <div className="footer-actions">
+          {timeEstimate && !isLoading && canRun && (
+            <div className={`time-estimate time-estimate-${timeEstimate.confidence}`} title="Estimated time">
+              <ClockIcon />
+              <span>{timeEstimate.formatted}</span>
+            </div>
+          )}
+          <button
+            onClick={handleRunAnalysis}
+            disabled={!canRun}
+            className={`btn btn-primary analysis-run-btn ${needsAnalysis && canRun ? 'btn-accent pulse' : ''}`}
+          >
+            <PlayIcon />
+            {isLoading ? 'Processing...' : needsAnalysis ? 'Run Analysis' : 'Reanalyze'}
+          </button>
         </div>
       </div>
     </div>

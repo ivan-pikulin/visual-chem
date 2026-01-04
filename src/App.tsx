@@ -176,13 +176,10 @@ function App() {
           </div>
         ) : (
           <div className="plot-view">
-            {/* Plot Area with floating toolbar */}
-            <div className={`plot-container ${sidebarOpen ? 'with-sidebar' : ''}`}>
+            <div className="plot-container">
               <ScatterPlot />
               <PlotToolbar onToggleSidebar={toggleSidebar} sidebarOpen={sidebarOpen} />
             </div>
-
-            {/* Unified Sidebar */}
             <aside className={`plot-sidebar-wrapper ${sidebarOpen ? 'open' : ''}`}>
               <PlotSidebar onClose={toggleSidebar} />
             </aside>

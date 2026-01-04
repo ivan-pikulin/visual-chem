@@ -78,8 +78,12 @@ export function printCalibrationReport(): void {
 
   console.group('UMAP coefficients');
   console.log(`time = ${c.umap.a.toFixed(4)} × n×log(n)×epochs/1e4 + ${c.umap.b.toFixed(4)} × n×neighbors/1e3 + ${c.umap.c.toFixed(1)}`);
-  const umapExample = c.umap.a * (1000 * 10 * 200) / 1e4 + c.umap.b * (1000 * 15) / 1e3 + c.umap.c;
-  console.log(`Example: n=1000, epochs=200, neighbors=15 → ${(umapExample / 1000).toFixed(1)}s`);
+  // Default epochs=500, neighbors=15
+  const umapExample = c.umap.a * (1000 * 10 * 500) / 1e4 + c.umap.b * (1000 * 15) / 1e3 + c.umap.c;
+  console.log(`Example: n=1000, epochs=500, neighbors=15 → ${(umapExample / 1000).toFixed(1)}s`);
+  // Large dataset example
+  const umapLarge = c.umap.a * (6000 * 12.55 * 500) / 1e4 + c.umap.b * (6000 * 15) / 1e3 + c.umap.c;
+  console.log(`Example: n=6000, epochs=500, neighbors=15 → ${(umapLarge / 60000).toFixed(1)}min`);
   console.groupEnd();
 
   console.groupEnd();

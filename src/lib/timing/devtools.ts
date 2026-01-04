@@ -59,9 +59,10 @@ function reset(): void {
  * Test time estimate for given parameters
  */
 function testEstimate(n: number, method: 'pca' | 'tsne' | 'umap' = 'umap'): string {
+  // Use app defaults (nEpochs=500 matches store/useAppStore.ts)
   const params = {
     tsne: { perplexity: 30, iterations: 1000, learningRate: 200 },
-    umap: { nNeighbors: 15, minDist: 0.1, nEpochs: 200 },
+    umap: { nNeighbors: 15, minDist: 0.1, nEpochs: 500 },
   };
 
   const ms = estimateDRTime(n, method, params);

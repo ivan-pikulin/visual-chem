@@ -532,6 +532,71 @@ function MoleculeTooltip({
   );
 }
 
+// Draggable Legend Wrapper
+interface DraggableLegendProps {
+  children: React.ReactNode;
+  title: string;
+}
+
+function DraggableLegend({ children, title }: DraggableLegendProps) {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
+  const legendRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only start drag from the title area
+    if ((e.target as HTMLElement).closest('.cluster-legend-title')) {
+      e.preventDefault();
+      setIsDragging(true);
+      dragStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        posX: position.x,
+        posY: position.y,
+      };
+    }
+  }, [position]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - dragStartRef.current.x;
+      const dy = e.clientY - dragStartRef.current.y;
+      setPosition({
+        x: dragStartRef.current.posX + dx,
+        y: dragStartRef.current.posY + dy,
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
+  return (
+    <div
+      ref={legendRef}
+      className={`cluster-legend ${isDragging ? 'dragging' : ''}`}
+      style={{
+        transform: `translate(${position.x}px, ${position.y}px)`,
+      }}
+      onMouseDown={handleMouseDown}
+    >
+      <p className="cluster-legend-title">{title}</p>
+      {children}
+    </div>
+  );
+}
+
 interface ClusterLegendProps {
   nClusters: number;
   clusterLabels: number[];
@@ -545,8 +610,7 @@ function ClusterLegend({ nClusters, clusterLabels }: ClusterLegendProps) {
   const total = clusterLabels.length;
 
   return (
-    <div className="cluster-legend">
-      <p className="cluster-legend-title">Clusters</p>
+    <DraggableLegend title="Clusters">
       {Array.from({ length: nClusters }, (_, i) => {
         const count = counts.get(i) || 0;
         const percent = ((count / total) * 100).toFixed(0);
@@ -562,7 +626,7 @@ function ClusterLegend({ nClusters, clusterLabels }: ClusterLegendProps) {
           </div>
         );
       })}
-    </div>
+    </DraggableLegend>
   );
 }
 
@@ -581,8 +645,7 @@ function GroupLegend({ groups, molecules }: GroupLegendProps) {
   const total = molecules.length;
 
   return (
-    <div className="cluster-legend">
-      <p className="cluster-legend-title">Groups</p>
+    <DraggableLegend title="Groups">
       {groups.map((group, i) => {
         const count = counts.get(group) || 0;
         const percent = ((count / total) * 100).toFixed(0);
@@ -598,7 +661,7 @@ function GroupLegend({ groups, molecules }: GroupLegendProps) {
           </div>
         );
       })}
-    </div>
+    </DraggableLegend>
   );
 }
 
@@ -608,8 +671,7 @@ interface DatasetLegendProps {
 
 function DatasetLegend({ datasets }: DatasetLegendProps) {
   return (
-    <div className="cluster-legend">
-      <p className="cluster-legend-title">Datasets</p>
+    <DraggableLegend title="Datasets">
       {datasets.map((ds, i) => {
         const validCount = ds.molecules.filter(m => m.isValid && m.coordinates).length;
         const color = ds.color || DATASET_COLORS[i % DATASET_COLORS.length];
@@ -625,6 +687,6 @@ function DatasetLegend({ datasets }: DatasetLegendProps) {
           </div>
         );
       })}
-    </div>
+    </DraggableLegend>
   );
 }

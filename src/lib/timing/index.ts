@@ -13,6 +13,8 @@ import type { DimensionalityMethod, TSNEParams, UMAPParams } from '../../types';
 
 // Storage key for persisted coefficients
 const STORAGE_KEY = 'visual-chem-timing-coefficients';
+// Version for auto-reset when formula changes
+const COEFFICIENTS_VERSION = 2;
 
 // Default coefficients derived from benchmarks
 // These will be updated as the app runs and collects real timing data
@@ -43,6 +45,7 @@ export interface TimingCoefficients {
   // Metadata
   sampleCount: number; // How many measurements contributed to these coefficients
   lastUpdated: number; // Timestamp
+  version?: number;    // For auto-reset when formula changes
 }
 
 // Default coefficients based on empirical estimates for browser JS implementations
@@ -54,48 +57,55 @@ export interface TimingCoefficients {
 //
 // Complexity:
 // - PCA: O(n * d²) but d=2048 is fixed, so effectively O(n)
-// - t-SNE: O(n * log(n)) with Barnes-Hut, but JS impl is slower, ~O(n^1.5)
+// - t-SNE: O(n²) for neighbor search, expensive in JS
 // - UMAP: O(n * log(n) * epochs) for neighbor graph + optimization
 //
 // Empirical estimates (M1 Mac, Chrome, Web Worker):
-// | Method | n=100  | n=500  | n=1000 | n=2000 |
-// |--------|--------|--------|--------|--------|
-// | PCA    | ~20ms  | ~50ms  | ~100ms | ~200ms |
-// | t-SNE  | ~2s    | ~15s   | ~45s   | ~180s  |
-// | UMAP   | ~1s    | ~4s    | ~10s   | ~25s   |
+// | Method | n=100  | n=500  | n=1000 | n=2000 | n=6000 |
+// |--------|--------|--------|--------|--------|--------|
+// | PCA    | ~50ms  | ~100ms | ~200ms | ~400ms | ~1.2s  |
+// | t-SNE  | ~3s    | ~30s   | ~120s  | ~8min  | ~1hr   |
+// | UMAP   | ~2s    | ~8s    | ~20s   | ~60s   | ~5min  |
+//
+// Note: Coefficients auto-adapt during usage via recordTiming()
 export const DEFAULT_COEFFICIENTS: TimingCoefficients = {
   pca: {
-    a: 0.08,   // ~80ms for 1000 samples
-    b: 20,     // 20ms base overhead
+    a: 0.15,   // ~150ms for 1000 samples
+    b: 50,     // 50ms base overhead (worker startup)
   },
   tsne: {
     // time = a * n² * iterations / 1e6 + b * n + c
-    // For n=1000, iter=1000: 1.2 * 1e6 * 1e3 / 1e6 + 0.5 * 1000 + 500 = 1200 + 500 + 500 = 2200ms... too low
-    // Adjusted: n=1000, iter=1000 should be ~45s
-    // 45000 = a * 1e9 / 1e6 + b * 1000 + c = a * 1000 + 1000b + c
-    // Let's use simpler model: time = a * (n/100)^2 * (iter/1000) * 1000 + c
-    a: 4.5,    // Quadratic scaling factor
-    b: 0.5,    // Linear term (initialization)
-    c: 500,    // Base overhead (worker startup, etc.)
+    // For n=1000, iter=1000: should be ~120s (2 minutes)
+    // 120000 = a * 1e9 / 1e6 + b * 1000 + c = 1000a + 1000b + c
+    // With a=100, b=15, c=5000: 100000 + 15000 + 5000 = 120000
+    a: 100,    // Quadratic scaling (n² * iter / 1e6)
+    b: 15,     // Linear term (per-sample overhead)
+    c: 5000,   // Base overhead (worker startup, tree construction)
   },
   umap: {
     // time = a * n * log(n) * epochs / 1e4 + b * n * neighbors / 1e3 + c
-    // For n=1000, epochs=200, neighbors=15:
-    // a * 1000 * 10 * 200 / 1e4 + b * 1000 * 15 / 1e3 + c = 200a + 15b + c
-    // Target ~10s = 10000ms: 200a + 15b + c = 10000
-    // Let a=40, b=50, c=500: 8000 + 750 + 500 = 9250 ≈ 10s
-    a: 40,     // Epoch iteration coefficient
-    b: 50,     // Neighbor graph coefficient
-    c: 500,    // Base overhead
+    // For n=1000, epochs=500, neighbors=15:
+    // a * 1000 * 10 * 500 / 1e4 + b * 1000 * 15 / 1e3 + c = 500a + 15b + c
+    // Target ~20s = 20000ms: 500a + 15b + c = 20000
+    // For n=6000, epochs=500, neighbors=15:
+    // a * 6000 * 12.55 * 500 / 1e4 + b * 6000 * 15 / 1e3 + c = 3765a + 90b + c
+    // Target ~5min = 300000ms
+    // Let a=35, b=200, c=2000:
+    // n=1000: 17500 + 3000 + 2000 = 22500ms ≈ 22s ✓
+    // n=6000: 131775 + 18000 + 2000 = 151775ms ≈ 2.5min (conservative)
+    a: 35,     // Epoch iteration coefficient
+    b: 200,    // Neighbor graph coefficient (expensive!)
+    c: 2000,   // Base overhead
   },
   fingerprint: {
-    // RDKit.js Morgan fingerprint: ~2-5ms per molecule
-    a: 3,      // 3ms per molecule base
-    b: 0.02,   // Small factor for SMILES complexity
-    c: 200,    // RDKit WASM initialization overhead
+    // RDKit.js Morgan fingerprint: ~3-8ms per molecule
+    a: 5,      // 5ms per molecule base
+    b: 0.05,   // Factor for SMILES complexity
+    c: 500,    // RDKit WASM initialization overhead
   },
   sampleCount: 0,
   lastUpdated: 0,
+  version: COEFFICIENTS_VERSION,
 };
 
 // EMA smoothing factor (0.1 = slow adaptation, 0.3 = faster)
@@ -103,14 +113,22 @@ const EMA_ALPHA = 0.2;
 
 /**
  * Load coefficients from localStorage or return defaults
+ * Auto-resets if version is outdated
  */
 export function loadCoefficients(): TimingCoefficients {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as TimingCoefficients;
-      // Validate structure
+      // Validate structure and version
       if (parsed.pca && parsed.tsne && parsed.umap && parsed.fingerprint) {
+        // Check version - reset if outdated
+        if (parsed.version !== COEFFICIENTS_VERSION) {
+          console.log('⏱️ Timing coefficients version changed, resetting to new defaults');
+          const defaults = { ...DEFAULT_COEFFICIENTS };
+          saveCoefficients(defaults);
+          return defaults;
+        }
         return parsed;
       }
     }

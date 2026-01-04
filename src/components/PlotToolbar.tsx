@@ -51,6 +51,48 @@ export function PlotToolbar({ onToggleSidebar, sidebarOpen }: PlotToolbarProps) 
   const colorDropdownRef = useRef<HTMLDivElement>(null);
   const exportDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Dragging state
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.plot-toolbar-drag-handle')) {
+      e.preventDefault();
+      setIsDragging(true);
+      dragStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        posX: position.x,
+        posY: position.y,
+      };
+    }
+  }, [position]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - dragStartRef.current.x;
+      const dy = e.clientY - dragStartRef.current.y;
+      setPosition({
+        x: dragStartRef.current.posX + dx,
+        y: dragStartRef.current.posY + dy,
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -142,7 +184,23 @@ export function PlotToolbar({ onToggleSidebar, sidebarOpen }: PlotToolbarProps) 
   }, [visualization.pointSize, setVisualization]);
 
   return (
-    <div className="plot-toolbar">
+    <div
+      className={`plot-toolbar ${isDragging ? 'dragging' : ''}`}
+      style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
+      onMouseDown={handleDragStart}
+    >
+      {/* Drag handle */}
+      <div className="plot-toolbar-drag-handle" title="Drag to move">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="5" cy="5" r="2" />
+          <circle cx="12" cy="5" r="2" />
+          <circle cx="5" cy="12" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="5" cy="19" r="2" />
+          <circle cx="12" cy="19" r="2" />
+        </svg>
+      </div>
+
       {/* Color mode dropdown */}
       <div className="plot-toolbar-group" ref={colorDropdownRef}>
         <button

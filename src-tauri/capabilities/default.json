@@ -11,8 +11,21 @@
     "dialog:allow-save",
     "dialog:allow-open",
     "fs:default",
-    "fs:allow-read",
-    "fs:allow-write",
-    "fs:allow-write-text-file"
+    "fs:read-all",
+    "fs:write-all",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$HOME/**/*" },
+        { "path": "$DOCUMENT/**/*" },
+        { "path": "$DOWNLOAD/**/*" },
+        { "path": "$DESKTOP/**/*" },
+        { "path": "$APPDATA/**/*" },
+        { "path": "$APPLOCALDATA/**/*" },
+        { "path": "$APPCONFIG/**/*" },
+        { "path": "$TEMP/**/*" }
+      ]
+    },
+    "deep-link:default"
   ]
 }

@@ -399,6 +399,21 @@ export async function saveProjectAs(): Promise<boolean> {
   return false;
 }
 
+export async function openProjectFromPath(filePath: string): Promise<boolean> {
+  const data = await readFile(filePath);
+  const projectData = await parseProjectZip(data);
+
+  useAppStore.getState().loadProjectState(projectData);
+
+  projectState.currentFilePath = filePath;
+  projectState.lastSavedState = computeStateHash(useAppStore.getState());
+  projectState.isDirty = false;
+
+  updateWindowTitle();
+  notifyListeners();
+  return true;
+}
+
 export async function openProject(): Promise<boolean> {
   const filePath = await open({
     filters: [{ name: 'ChemPlot Project', extensions: ['vchem'] }],
@@ -406,18 +421,7 @@ export async function openProject(): Promise<boolean> {
   });
 
   if (filePath && typeof filePath === 'string') {
-    const data = await readFile(filePath);
-    const projectData = await parseProjectZip(data);
-
-    useAppStore.getState().loadProjectState(projectData);
-
-    projectState.currentFilePath = filePath;
-    projectState.lastSavedState = computeStateHash(useAppStore.getState());
-    projectState.isDirty = false;
-
-    updateWindowTitle();
-    notifyListeners();
-    return true;
+    return await openProjectFromPath(filePath);
   }
   return false;
 }

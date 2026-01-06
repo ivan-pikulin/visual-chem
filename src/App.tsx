@@ -1,4 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { listen } from '@tauri-apps/api/event';
+import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { useAppStore } from './store/useAppStore';
 import {
   ScatterPlot,
@@ -16,6 +18,7 @@ import {
   subscribeToProjectState,
   saveProject as saveProjectManaged,
   openProject,
+  openProjectFromPath,
 } from './lib/projectManager';
 import './index.css';
 
@@ -28,6 +31,29 @@ function App() {
   const [projectIsDirty, setProjectIsDirty] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Handle opening file from deep link / file association
+  const handleOpenFromPath = useCallback(async (filePath: string) => {
+    try {
+      // Extract path from file:// URL if needed
+      let path = filePath;
+      if (path.startsWith('file://')) {
+        path = decodeURIComponent(path.replace('file://', ''));
+      }
+
+      if (path.endsWith('.vchem')) {
+        const opened = await openProjectFromPath(path);
+        if (opened) {
+          const state = useAppStore.getState();
+          if (state.datasets.some(d => d.molecules.some(m => m.coordinates))) {
+            setMainTab('plot');
+          }
+        }
+      }
+    } catch (error) {
+      setError(`Failed to open project: ${error}`);
+    }
+  }, [setError]);
+
   // Initialize project manager
   useEffect(() => {
     initProjectManager();
@@ -36,11 +62,46 @@ function App() {
       setProjectIsDirty(state.isDirty);
     });
 
+    // Listen for deep link events (file associations)
+    let deepLinkUnlisten: (() => void) | undefined;
+    let eventUnlisten: (() => void) | undefined;
+
+    const setupDeepLink = async () => {
+      try {
+        // Check for URLs passed at startup
+        const { getCurrent } = await import('@tauri-apps/plugin-deep-link');
+        const initialUrls = await getCurrent();
+        if (initialUrls && initialUrls.length > 0) {
+          for (const url of initialUrls) {
+            handleOpenFromPath(url);
+          }
+        }
+
+        // Listen for future deep link events
+        deepLinkUnlisten = await onOpenUrl((urls) => {
+          for (const url of urls) {
+            handleOpenFromPath(url);
+          }
+        });
+
+        // Listen for startup event from backend (backup)
+        eventUnlisten = await listen<string>('deep-link-open', (event) => {
+          handleOpenFromPath(event.payload);
+        });
+      } catch (e) {
+        console.warn('Deep link setup failed:', e);
+      }
+    };
+
+    setupDeepLink();
+
     return () => {
       unsubscribe();
+      deepLinkUnlisten?.();
+      eventUnlisten?.();
       destroyProjectManager();
     };
-  }, []);
+  }, [handleOpenFromPath]);
 
   // Handle save project (Tauri native dialog)
   const handleSaveProject = useCallback(async () => {

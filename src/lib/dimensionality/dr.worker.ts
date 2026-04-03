@@ -54,6 +54,7 @@ function runTSNE(
   params: { perplexity?: number; iterations?: number; learningRate?: number }
 ) {
   const { perplexity = 30, iterations = 1000, learningRate = 200 } = params;
+  const progressInterval = Math.max(1, Math.floor(iterations / 100));
 
   // Report initial progress
   self.postMessage({
@@ -78,14 +79,23 @@ function runTSNE(
     type: 'dense',
   });
 
-  // Report progress at 10% (after init, before run)
-  self.postMessage({
-    type: 'progress',
-    progress: {
-      current: Math.floor(iterations * 0.1),
-      total: iterations,
-    },
-  } as WorkerResponse);
+  const eventedModel = model as unknown as {
+    on: (eventName: 'progressIter', handler: (iter: [number, number, number]) => void) => void;
+  };
+
+  eventedModel.on('progressIter', (iter: [number, number, number]) => {
+    const current = Array.isArray(iter) ? iter[0] : Number(iter);
+
+    if (current % progressInterval === 0 || current >= iterations - 1) {
+      self.postMessage({
+        type: 'progress',
+        progress: {
+          current,
+          total: iterations,
+        },
+      } as WorkerResponse);
+    }
+  });
 
   // Run all iterations (this is blocking, but it's in a worker so UI stays responsive)
   model.run();

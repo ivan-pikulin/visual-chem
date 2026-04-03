@@ -13,38 +13,63 @@ function formatTime(seconds: number): string {
 export function ProgressBar() {
   const { isLoading, progress, progressMessage, cancelOperation } = useAppStore();
   const startTimeRef = useRef<number | null>(null);
+  const lastProgressRef = useRef<number>(0);
+  const lastProgressTimeRef = useRef<number | null>(null);
+  const smoothedRateRef = useRef<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [estimated, setEstimated] = useState<number | null>(null);
 
   // Track start time and update elapsed/estimated
   useEffect(() => {
-    if (isLoading && progress > 0) {
-      if (startTimeRef.current === null) {
-        startTimeRef.current = Date.now();
-      }
-
-      const interval = setInterval(() => {
-        if (startTimeRef.current) {
-          const elapsedMs = Date.now() - startTimeRef.current;
-          const elapsedSec = elapsedMs / 1000;
-          setElapsed(elapsedSec);
-
-          // Estimate remaining time based on progress
-          if (progress > 5) {
-            const rate = progress / elapsedSec; // percent per second
-            const remaining = (100 - progress) / rate;
-            setEstimated(remaining);
-          }
-        }
-      }, 500);
-
-      return () => clearInterval(interval);
-    } else if (!isLoading) {
+    if (!isLoading) {
       // Reset when loading stops
       startTimeRef.current = null;
+      lastProgressRef.current = 0;
+      lastProgressTimeRef.current = null;
+      smoothedRateRef.current = null;
       setElapsed(0);
       setEstimated(null);
+      return;
     }
+
+    const now = Date.now();
+    if (startTimeRef.current === null) {
+      startTimeRef.current = now;
+    }
+    if (lastProgressTimeRef.current === null) {
+      lastProgressTimeRef.current = now;
+      lastProgressRef.current = progress;
+    }
+
+    if (progress > lastProgressRef.current && lastProgressTimeRef.current !== null) {
+      const deltaProgress = progress - lastProgressRef.current;
+      const deltaSeconds = Math.max(0.001, (now - lastProgressTimeRef.current) / 1000);
+      const instantaneousRate = deltaProgress / deltaSeconds;
+      smoothedRateRef.current =
+        smoothedRateRef.current === null
+          ? instantaneousRate
+          : smoothedRateRef.current * 0.7 + instantaneousRate * 0.3;
+      lastProgressRef.current = progress;
+      lastProgressTimeRef.current = now;
+    }
+
+    const interval = setInterval(() => {
+      if (!startTimeRef.current) return;
+      const elapsedMs = Date.now() - startTimeRef.current;
+      const elapsedSec = elapsedMs / 1000;
+      setElapsed(elapsedSec);
+
+      // Only show ETA when we have a meaningful rate estimate.
+      const rate = smoothedRateRef.current;
+      if (rate && progress > 0 && progress < 100) {
+        const remaining = (100 - progress) / rate;
+        setEstimated(Math.max(0, remaining));
+      } else {
+        setEstimated(null);
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
   }, [isLoading, progress]);
 
   const handleCancel = useCallback(() => {

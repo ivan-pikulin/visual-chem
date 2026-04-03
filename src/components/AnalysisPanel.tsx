@@ -217,7 +217,7 @@ export function AnalysisPanel({ onGoToData, onGoToPlot }: AnalysisPanelProps) {
         { tsne: tsneParams, umap: umapParams },
         (p) => {
           const percent = (p.current / p.total) * 100;
-          setProgress(percent, `${p.stage.toUpperCase()} ${p.current}/${p.total}`);
+          setProgress(percent, `${p.stage.toUpperCase()} ${p.current}/${p.total} · ${totalAnalyzableMolecules.toLocaleString()} molecules`);
         },
         signal
       );

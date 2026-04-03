@@ -385,7 +385,7 @@ export interface AppState {
 
   // Actions - Coordinates
   updateCoordinates: (coordinates: Point2D[]) => void;
-  updateAllCoordinates: (coordinatesMap: Map<string, Point2D[]>) => void;
+  updateAllCoordinates: (coordinatesMap: Map<string, Map<number, Point2D>>) => void;
   updateAllClusters: (clusters: number[]) => void;
   updateAllOutliers: (outlierIndices: number[]) => void;
   updateMoleculeClusters: (clusters: number[]) => void;

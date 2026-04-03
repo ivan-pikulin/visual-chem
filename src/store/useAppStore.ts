@@ -508,6 +508,7 @@ export const useAppStore = create<AppState>((set) => ({
       return {
         datasets,
         dataset: getActiveDataset(datasets, state.activeDatasetId),
+        needsAnalysis: true,
       };
     }),
 
@@ -524,6 +525,7 @@ export const useAppStore = create<AppState>((set) => ({
       return {
         datasets,
         dataset: getActiveDataset(datasets, state.activeDatasetId),
+        needsAnalysis: true,
       };
     }),
 
@@ -538,6 +540,7 @@ export const useAppStore = create<AppState>((set) => ({
       return {
         datasets,
         dataset: getActiveDataset(datasets, state.activeDatasetId),
+        needsAnalysis: true,
       };
     }),
 
@@ -551,6 +554,7 @@ export const useAppStore = create<AppState>((set) => ({
       return {
         datasets,
         dataset: getActiveDataset(datasets, state.activeDatasetId),
+        needsAnalysis: true,
       };
     }),
 
@@ -649,18 +653,20 @@ export const useAppStore = create<AppState>((set) => ({
     }),
 
   // Update coordinates for all datasets at once (for combined analysis)
-  updateAllCoordinates: (coordinatesMap: Map<string, Point2D[]>) =>
+  updateAllCoordinates: (coordinatesMap: Map<string, Map<number, Point2D>>) =>
     set((state) => {
       const datasets = state.datasets.map(dataset => {
         const coords = coordinatesMap.get(dataset.id);
-        if (!coords) return dataset;
-
-        let coordIndex = 0;
         const molecules = dataset.molecules.map((mol) => {
-          if (mol.isValid) {
-            return { ...mol, coordinates: coords[coordIndex++] };
-          }
-          return mol;
+          const originalIndex = mol.originalIndex;
+          const coordinate = originalIndex !== undefined ? coords?.get(originalIndex) : undefined;
+
+          return {
+            ...mol,
+            coordinates: coordinate,
+            cluster: undefined,
+            isOutlier: undefined,
+          };
         });
         return { ...dataset, molecules };
       });

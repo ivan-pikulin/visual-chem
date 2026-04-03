@@ -4,6 +4,7 @@ import { reduceDimensionality } from '../lib/dimensionality';
 import { OperationCancelledError } from '../lib/fingerprints';
 import { computeKMeans } from '../lib/clustering';
 import { removeOutliers } from '../lib/outliers';
+import { applyFilters } from '../utils/filterUtils';
 import {
   estimateDRTime,
   formatTimeEstimate,
@@ -15,7 +16,7 @@ import {
   isInRecommendedRange,
   getDeviationFromRecommended,
 } from '../lib/timing/recommendations';
-import type { DimensionalityMethod } from '../types';
+import type { DimensionalityMethod, Point2D, ProcessedMolecule } from '../types';
 
 // Icons
 const WarningIcon = () => (
@@ -82,6 +83,11 @@ interface AnalysisPanelProps {
   onGoToPlot?: () => void;
 }
 
+type AnalysisBatch = {
+  id: string;
+  molecules: ProcessedMolecule[];
+};
+
 export function AnalysisPanel({ onGoToData, onGoToPlot }: AnalysisPanelProps) {
   const {
     datasets,
@@ -108,34 +114,52 @@ export function AnalysisPanel({ onGoToData, onGoToPlot }: AnalysisPanelProps) {
     updateAllOutliers,
   } = useAppStore();
 
-  // Count all valid molecules across all datasets
-  const totalValidMolecules = datasets.reduce((sum, ds) => {
-    return sum + ds.molecules.filter(m => m.isValid).length;
-  }, 0);
+  const analysisBatches = useMemo<AnalysisBatch[]>(() => {
+    return datasets.flatMap((ds) => {
+      const validMolecules = ds.molecules.filter((m) => m.isValid);
+      const molecules =
+        ds.filters && ds.filters.length > 0
+          ? applyFilters(validMolecules, ds.filters)
+          : validMolecules;
+
+      return molecules.length > 0 ? [{ id: ds.id, molecules }] : [];
+    });
+  }, [datasets]);
+
+  // Count all molecules that will actually participate in analysis
+  const totalAnalyzableMolecules = useMemo(
+    () => analysisBatches.reduce((sum, batch) => sum + batch.molecules.length, 0),
+    [analysisBatches]
+  );
+
+  const hasActiveFilters = useMemo(
+    () => datasets.some((ds) => (ds.filters?.length ?? 0) > 0),
+    [datasets]
+  );
 
   const hasData = datasets.length > 0;
 
   // Time estimation
   const timeEstimate = useMemo(() => {
-    if (totalValidMolecules === 0) return null;
-    const ms = estimateDRTime(totalValidMolecules, drMethod, { tsne: tsneParams, umap: umapParams });
+    if (totalAnalyzableMolecules === 0) return null;
+    const ms = estimateDRTime(totalAnalyzableMolecules, drMethod, { tsne: tsneParams, umap: umapParams });
     return {
       formatted: formatTimeEstimate(ms),
       ms,
       confidence: getConfidenceLevel(),
     };
-  }, [totalValidMolecules, drMethod, tsneParams, umapParams]);
+  }, [totalAnalyzableMolecules, drMethod, tsneParams, umapParams]);
 
   // Smart recommendations
   const tsneRecs = useMemo(() => {
-    if (totalValidMolecules < 10) return null;
-    return getTSNERecommendations(totalValidMolecules);
-  }, [totalValidMolecules]);
+    if (totalAnalyzableMolecules < 10) return null;
+    return getTSNERecommendations(totalAnalyzableMolecules);
+  }, [totalAnalyzableMolecules]);
 
   const umapRecs = useMemo(() => {
-    if (totalValidMolecules < 10) return null;
-    return getUMAPRecommendations(totalValidMolecules);
-  }, [totalValidMolecules]);
+    if (totalAnalyzableMolecules < 10) return null;
+    return getUMAPRecommendations(totalAnalyzableMolecules);
+  }, [totalAnalyzableMolecules]);
 
   // Check if current params are in recommended range
   const perplexityStatus = useMemo(() => {
@@ -166,26 +190,19 @@ export function AnalysisPanel({ onGoToData, onGoToPlot }: AnalysisPanelProps) {
   }, [umapRecs, setUMAPParams, hasData, setNeedsAnalysis]);
 
   const handleRunAnalysis = useCallback(async () => {
-    if (totalValidMolecules === 0) return;
+    if (totalAnalyzableMolecules === 0) return;
 
     const abortController = startOperation();
     const signal = abortController.signal;
     setProgress(0, `Running ${drMethod.toUpperCase()}...`);
 
     try {
-      // Collect all fingerprints from all datasets into one combined matrix
+      // Collect all fingerprints from the filtered molecule sets into one combined matrix
       const combinedFingerprints: number[][] = [];
-      const datasetRanges: { id: string; start: number; count: number }[] = [];
-
-      for (const ds of datasets) {
-        const validMolecules = ds.molecules.filter((m) => m.isValid);
-        if (validMolecules.length === 0) continue;
-
-        const start = combinedFingerprints.length;
-        for (const mol of validMolecules) {
+      for (const batch of analysisBatches) {
+        for (const mol of batch.molecules) {
           combinedFingerprints.push(mol.fingerprint);
         }
-        datasetRanges.push({ id: ds.id, start, count: validMolecules.length });
       }
 
       if (combinedFingerprints.length === 0) {
@@ -207,11 +224,18 @@ export function AnalysisPanel({ onGoToData, onGoToPlot }: AnalysisPanelProps) {
 
       if (signal.aborted) throw new OperationCancelledError();
 
-      // Split coordinates back to respective datasets
-      const coordinatesMap = new Map<string, typeof coordinates>();
-      for (const range of datasetRanges) {
-        const dsCoords = coordinates.slice(range.start, range.start + range.count);
-        coordinatesMap.set(range.id, dsCoords);
+      // Split coordinates back to respective datasets using original molecule indices
+      const coordinatesMap = new Map<string, Map<number, Point2D>>();
+      let coordinateIndex = 0;
+      for (const batch of analysisBatches) {
+        const datasetCoordinates = new Map<number, Point2D>();
+        for (const mol of batch.molecules) {
+          const coordinate = coordinates[coordinateIndex++];
+          if (mol.originalIndex !== undefined) {
+            datasetCoordinates.set(mol.originalIndex, coordinate);
+          }
+        }
+        coordinatesMap.set(batch.id, datasetCoordinates);
       }
       updateAllCoordinates(coordinatesMap);
 
@@ -247,14 +271,14 @@ export function AnalysisPanel({ onGoToData, onGoToPlot }: AnalysisPanelProps) {
       setLoading(false);
     }
   }, [
-    datasets, totalValidMolecules, drMethod, tsneParams, umapParams, clustering, outlierSettings,
+    analysisBatches, totalAnalyzableMolecules, drMethod, tsneParams, umapParams, clustering, outlierSettings,
     setLoading, setProgress, updateAllCoordinates, updateAllClusters,
     updateAllOutliers, setError, setNeedsAnalysis, startOperation
   ]);
 
   const handleMethodChange = (method: DimensionalityMethod) => {
     setDRMethod(method);
-    if (totalValidMolecules > 0) {
+    if (totalAnalyzableMolecules > 0) {
       setNeedsAnalysis(true);
     }
   };
@@ -269,7 +293,7 @@ export function AnalysisPanel({ onGoToData, onGoToPlot }: AnalysisPanelProps) {
     return datasets.filter(ds => ds.columnMapping?.smiles);
   }, [datasets]);
 
-  const canRun = hasData && configuredDatasets.length > 0 && !isLoading;
+  const canRun = hasData && configuredDatasets.length > 0 && totalAnalyzableMolecules > 0 && !isLoading;
 
   return (
     <div className="analysis-panel-new">
@@ -308,7 +332,7 @@ export function AnalysisPanel({ onGoToData, onGoToPlot }: AnalysisPanelProps) {
             </div>
             <div className="data-summary-bar-text">
               <span className="data-summary-bar-title">
-                {totalValidMolecules.toLocaleString()} molecules ready
+                {totalAnalyzableMolecules.toLocaleString()} molecule{totalAnalyzableMolecules === 1 ? '' : 's'} {hasActiveFilters ? 'selected' : 'ready'}
               </span>
               <span className="data-summary-bar-meta">
                 2048-bit fingerprints
@@ -619,7 +643,7 @@ export function AnalysisPanel({ onGoToData, onGoToPlot }: AnalysisPanelProps) {
         <div className="footer-info">
           <div className="footer-status-item">
             <span className="footer-status-dot" />
-            {totalValidMolecules.toLocaleString()} molecules
+            {totalAnalyzableMolecules.toLocaleString()} molecules
           </div>
           <div className="footer-status-item">
             <MethodIcon />
